@@ -560,7 +560,7 @@ window.handleSend = async function() {
   const text = input.value.trim();
   
   if (!text || state.isTyping) return;
-  
+
   // Add user message
   const currentConv = CONVERSATIONS[state.currentConversation];
   currentConv.messages.push({
@@ -576,9 +576,21 @@ window.handleSend = async function() {
   state.isTyping = true;
   renderMessages(state.currentConversation);
   
+  // Guard against file:// protocol
+  if (window.location.protocol === 'file:') {
+    state.isTyping = false;
+    currentConv.messages.push({
+      sender: 'ai',
+      text: `<div class="static-notice" style="border-color: red; color: red;"><strong>Security Block:</strong> Browsers block API requests when opening HTML files directly from Finder (using <code>file://</code>). <br><br>Please open the app via your Vercel URL (e.g. <code>https://your-project.vercel.app</code>) or run a local server (<code>npx vercel dev</code>).</div>`,
+      timestamp: formatTimestamp(new Date())
+    });
+    renderMessages(state.currentConversation);
+    return;
+  }
+  
   // Call real AI API
   try {
-    const response = await fetch('/api/chat', {
+    const response = await fetch('/api/design', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
