@@ -1130,28 +1130,31 @@ function injectCSS() {
     
     .layout-viz {
       height: 160px;
-      background: #f0f4f1;
+      background: #f9fafb;
       padding: 15px;
       display: flex;
       flex-direction: column;
       gap: 8px;
+      overflow: hidden;
+      position: relative;
     }
-    .layout-viz .box { background: rgba(40, 187, 78, 0.15); border-radius: 6px; border: 1px solid rgba(40, 187, 78, 0.12); }
+    .layout-viz * { min-height: 0; }
+    .layout-viz .box { background: #f3f4f6; border-radius: 6px; border: 1px solid #e5e7eb; width: 100%; height: 100%; min-height: 20px; }
     
-    .z-pattern .kpi-row { display: flex; gap: 8px; height: 30%; }
+    .z-pattern .kpi-row { display: flex; gap: 8px; height: 30%; width: 100%; }
     .z-pattern .kpi-row .box { flex: 1; }
-    .z-pattern .chart-row { display: flex; gap: 8px; height: 45%; }
+    .z-pattern .chart-row { display: flex; gap: 8px; height: 45%; width: 100%; }
     .z-pattern .main-chart { flex: 2; }
     .z-pattern .side-chart { flex: 1; }
-    .z-pattern .table-row { height: 25%; }
+    .z-pattern .table-row { height: 25%; width: 100%; }
     .z-pattern .full-table { height: 100%; width: 100%; }
     
-    .bento-grid { display: grid; grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; gap: 8px; }
+    .bento-grid { display: grid; grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; gap: 8px; height: 100%; }
     .bento-grid .hero { grid-row: span 2; }
     
-    .command-center { display: flex; flex-direction: column; gap: 8px; }
+    .command-center { display: flex; flex-direction: column; gap: 8px; height: 100%; }
     .command-center .top-nav { height: 20%; width: 100%; }
-    .command-center .split-view { display: flex; gap: 8px; height: 80%; }
+    .command-center .split-view { display: flex; gap: 8px; height: 80%; width: 100%; }
     .command-center .sidebar { flex: 1; }
     .command-center .main-content { flex: 3; }
 
