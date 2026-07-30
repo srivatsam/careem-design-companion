@@ -81,7 +81,7 @@ Use simple HTML. Do not wrap the response in markdown blocks like \`\`\`html.`;
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-pro', // Using a high-quality model
+        model: 'google/gemini-1.5-pro', // Valid OpenRouter model
         messages: openRouterMessages,
       })
     });
@@ -89,7 +89,12 @@ Use simple HTML. Do not wrap the response in markdown blocks like \`\`\`html.`;
     if (!response.ok) {
       const errorText = await response.text();
       console.error('OpenRouter API Error:', errorText);
-      return res.status(response.status).json({ error: 'Failed to fetch from OpenRouter API' });
+      try {
+        const errJson = JSON.parse(errorText);
+        return res.status(response.status).json({ error: errJson.error?.message || 'OpenRouter API Error' });
+      } catch (e) {
+        return res.status(response.status).json({ error: errorText || 'Failed to fetch from OpenRouter API' });
+      }
     }
 
     const data = await response.json();
