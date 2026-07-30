@@ -75,7 +75,7 @@ Use simple HTML. Do not wrap the response in markdown blocks like \`\`\`html.`;
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': \`Bearer \${apiKey}\`,
+        'Authorization': 'Bearer ' + apiKey,
         'HTTP-Referer': 'https://careem-design-companion.vercel.app/', // Update to actual domain later
         'X-Title': 'Design Companion Prototype',
         'Content-Type': 'application/json'
