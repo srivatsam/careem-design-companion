@@ -81,7 +81,7 @@ Use simple HTML. Do not wrap the response in markdown blocks like \`\`\`html.`;
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'google/gemma-2-9b-it', // Official Gemma 2 9B Instruct model on OpenRouter
+        model: 'google/gemma-4-31b-it', // Latest flagship Gemma 4 31B Instruct model
         messages: openRouterMessages,
       })
     });
