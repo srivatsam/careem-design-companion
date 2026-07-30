@@ -608,7 +608,7 @@ window.handleSend = async function() {
     state.isTyping = false;
     currentConv.messages.push({
       sender: 'ai',
-      text: `<div class="static-notice" style="border-color: red; color: red;"><strong>Error:</strong> Network error. Make sure the API is running.</div>`,
+      text: `<div class="static-notice" style="border-color: red; color: red;"><strong>Network Error:</strong> ${error.message} - Make sure the Vercel deployment completed successfully.</div>`,
       timestamp: formatTimestamp(new Date())
     });
   }
@@ -981,18 +981,13 @@ function injectCSS() {
 
     .ai-message {
       background: transparent;
-      border: 1px solid var(--glass-border);
-      border-bottom-left-radius: 4px;
+      padding-left: 0;
     }
 
-    .ai-message.mode-layout-brainstorm {
-      border-left: 3px solid var(--accent-primary);
-    }
-    .ai-message.mode-ui-copy {
-      border-left: 3px solid var(--accent-blue);
-    }
+    .ai-message.mode-layout-brainstorm,
+    .ai-message.mode-ui-copy,
     .ai-message.mode-usability-feedback {
-      border-left: 3px solid var(--accent-green);
+      border-left: none;
     }
 
     .message-timestamp {
@@ -1026,8 +1021,8 @@ function injectCSS() {
       transition: border-color 0.3s ease, box-shadow 0.3s ease;
     }
     .input-bar:focus-within {
-      border-color: var(--accent-primary);
-      box-shadow: var(--shadow-lg), 0 0 0 2px rgba(40, 187, 78, 0.1);
+      border-color: #d1d5db;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
     }
 
     .input-chip {
@@ -1191,9 +1186,9 @@ function injectCSS() {
     }
     .copy-content { font-size: 0.9rem; margin-bottom: 16px; margin-top: 8px; color: var(--text-main); }
     .btn-copy {
-      background: var(--accent-primary-light);
-      border: 1px solid rgba(40, 187, 78, 0.2);
-      color: var(--accent-primary-dark);
+      background: #f3f4f6;
+      border: 1px solid #e5e7eb;
+      color: #374151;
       padding: 6px 12px;
       border-radius: 6px;
       font-size: 0.8rem;
@@ -1201,8 +1196,8 @@ function injectCSS() {
       cursor: pointer;
       transition: all 0.2s;
     }
-    .btn-copy:hover { background: var(--accent-primary); color: white; border-color: var(--accent-primary); }
-    .btn-copy.success { background: var(--accent-primary); color: white; border-color: var(--accent-primary); }
+    .btn-copy:hover { background: #e5e7eb; color: #111827; }
+    .btn-copy.success { background: #111827; color: white; border-color: #111827; }
 
     /* Feedback Analytics */
     .feedback-container { margin-top: 15px; }
@@ -1213,7 +1208,7 @@ function injectCSS() {
     .badge-critical { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
     .badge-high { background: #fff7ed; color: #ea580c; border: 1px solid #fed7aa; }
     .badge-medium { background: #fefce8; color: #ca8a04; border: 1px solid #fef08a; }
-    .badge-low { background: var(--accent-primary-light); color: var(--accent-primary-dark); border: 1px solid rgba(40, 187, 78, 0.25); }
+    .badge-low { background: #f3f4f6; color: #4b5563; border: 1px solid #e5e7eb; }
     
     .metric-bar-container { margin-top: 10px; }
     .metric-label { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px; display: flex; justify-content: space-between; }
@@ -1225,8 +1220,8 @@ function injectCSS() {
     .feedback-list { padding-left: 20px; font-size: 0.9rem; color: var(--text-muted); }
     .feedback-list li { margin-bottom: 8px; }
     
-    .stat-callout { background: var(--accent-primary-light); border-left: 4px solid var(--accent-primary); padding: 16px; display: flex; align-items: center; gap: 15px; margin: 15px 0; border-radius: 0 8px 8px 0; }
-    .big-stat { font-size: 2.5rem; font-weight: 700; color: var(--accent-primary); line-height: 1; }
+    .stat-callout { background: #f9fafb; border-left: 4px solid #111827; padding: 16px; display: flex; align-items: center; gap: 15px; margin: 15px 0; border-radius: 0 8px 8px 0; }
+    .big-stat { font-size: 2.5rem; font-weight: 700; color: #111827; line-height: 1; }
     
     .styled-table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 0.85rem; }
     .styled-table th, .styled-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--glass-border); }
