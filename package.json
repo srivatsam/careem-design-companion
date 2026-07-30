@@ -1,0 +1,13 @@
+{
+  "name": "design-companion",
+  "version": "1.0.0",
+  "description": "Design Companion - AI Design Assistant",
+  "main": "api/chat.js",
+  "scripts": {
+    "start": "vercel dev"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "vercel": "^39.0.0"
+  }
+}
