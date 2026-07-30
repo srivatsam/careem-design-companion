@@ -684,12 +684,12 @@ function injectCSS() {
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     
     :root {
-      --bg-color: #f8faf9;
-      --sidebar-bg: #ffffff;
+      --bg-color: #ffffff;
+      --sidebar-bg: #fdfdfd;
       --card-bg: #ffffff;
-      --glass-border: #e8ece9;
-      --text-main: #1a2e22;
-      --text-muted: #6b7f72;
+      --glass-border: #f0f0f0;
+      --text-main: #111827;
+      --text-muted: #6b7280;
       
       --accent-primary: #28BB4E;
       --accent-primary-light: #e8f8ed;
@@ -698,16 +698,16 @@ function injectCSS() {
       --accent-blue: #1a9e5c;
       --accent-green: #0d8a3f;
       
-      --user-msg-bg: linear-gradient(135deg, #28BB4E 0%, #1a9e3e 100%);
+      --user-msg-bg: #28BB4E;
       --ai-msg-bg: #ffffff;
       
-      --radius-sm: 10px;
-      --radius-md: 14px;
-      --radius-lg: 20px;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
       
-      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
-      --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
-      --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08);
+      --shadow-sm: none;
+      --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.04);
+      --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.06);
     }
 
     * {
@@ -880,9 +880,7 @@ function injectCSS() {
       align-items: center;
       gap: 16px;
       border-bottom: 1px solid var(--glass-border);
-      background: rgba(255, 255, 255, 0.85);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+      background: var(--bg-color);
       position: sticky;
       top: 0;
       z-index: 10;
@@ -913,9 +911,9 @@ function injectCSS() {
     .chat-container {
       flex: 1;
       overflow-y: auto;
-      padding: 20px;
+      padding: 24px;
       scroll-behavior: smooth;
-      background: linear-gradient(180deg, rgba(40, 187, 78, 0.02) 0%, var(--bg-color) 40%);
+      background: var(--bg-color);
     }
 
     .messages-container {
@@ -957,22 +955,22 @@ function injectCSS() {
     }
 
     .ai-avatar {
-      background: linear-gradient(135deg, #28BB4E 0%, #1a9e3e 100%);
-      color: #fff;
+      background: var(--bg-color);
+      color: var(--accent-primary);
+      border: 1px solid var(--glass-border);
     }
 
     .user-avatar {
-      background: linear-gradient(135deg, #1a2e22 0%, #2d4a36 100%);
+      background: var(--text-main);
       color: #fff;
     }
 
     .message {
       max-width: 85%;
-      padding: 16px 20px;
+      padding: 14px 18px;
       border-radius: var(--radius-lg);
       font-size: 0.95rem;
       line-height: 1.6;
-      box-shadow: var(--shadow-sm);
     }
 
     .user-message {
@@ -982,10 +980,9 @@ function injectCSS() {
     }
 
     .ai-message {
-      background: var(--ai-msg-bg);
+      background: transparent;
       border: 1px solid var(--glass-border);
       border-bottom-left-radius: 4px;
-      box-shadow: var(--shadow-md);
     }
 
     .ai-message.mode-layout-brainstorm {
@@ -1010,26 +1007,27 @@ function injectCSS() {
 
     /* Input Area */
     .input-area {
-      padding: 20px;
-      background: linear-gradient(to top, var(--bg-color) 70%, transparent);
+      padding: 24px;
+      background: var(--bg-color);
+      border-top: 1px solid var(--glass-border);
     }
 
     .input-bar {
       max-width: 800px;
       margin: 0 auto;
-      background: var(--card-bg);
+      background: var(--bg-color);
       border: 1px solid var(--glass-border);
       border-radius: var(--radius-md);
       padding: 12px 16px;
       display: flex;
       flex-direction: column;
       gap: 12px;
-      box-shadow: var(--shadow-lg);
+      box-shadow: var(--shadow-md);
       transition: border-color 0.3s ease, box-shadow 0.3s ease;
     }
     .input-bar:focus-within {
-      border-color: rgba(40, 187, 78, 0.5);
-      box-shadow: var(--shadow-lg), 0 0 0 3px rgba(40, 187, 78, 0.1);
+      border-color: var(--accent-primary);
+      box-shadow: var(--shadow-lg), 0 0 0 2px rgba(40, 187, 78, 0.1);
     }
 
     .input-chip {
