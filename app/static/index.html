@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27><rect x=%2730%27 y=%2735%27 width=%2740%27 height=%2755%27 rx=%278%27 fill=%27%238a5a2b%27/><rect x=%2742%27 y=%2712%27 width=%2716%27 height=%2726%27 rx=%273%27 fill=%27%233f2c1c%27/></svg>">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Atelier Noor · Perfume finder demo</title>
+<meta name="color-scheme" content="light dark">
+<style>
+  :root {
+    --bg: #faf7f2; --surface: #ffffff; --ink: #1f1a15; --ink-2: #5c5349; --border: #e8e1d6; --accent: #8a5a2b;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  }
+  :root[lang="ar"] { font-family: "SF Arabic", "Geeza Pro", "Noto Sans Arabic", "Segoe UI", Tahoma, system-ui, sans-serif; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #171411; --surface: #211d19; --ink: #f3ede5; --ink-2: #c6bbae; --border: #362f28; --accent: #d49a5c; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); line-height: 1.5; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+  header.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 0; }
+  .logo { font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: 15px; }
+  :root[lang="ar"] .logo { letter-spacing: 0; }
+  .lang { font-size: 14px; font-weight: 600; text-decoration: none; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; }
+  .hero { padding: 40px 0 28px; }
+  .hero h1 { font-size: clamp(30px, 6vw, 48px); line-height: 1.1; margin: 0 0 12px; font-weight: 700; max-width: 16ch; }
+  .hero p { margin: 0; max-width: 52ch; color: var(--ink-2); font-size: 17px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; padding: 12px 0 28px; }
+  .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .swatch { aspect-ratio: 4 / 3; display: grid; place-items: center; font-size: 28px; font-weight: 700; color: rgba(31,26,21,.55); }
+  .tile .meta { padding: 12px 14px 14px; }
+  .tile h3 { margin: 0; font-size: 16px; }
+  .tile p { margin: 2px 0 0; color: var(--ink-2); font-size: 14px; }
+  .note { border-top: 1px solid var(--border); padding: 20px 0 120px; color: var(--ink-2); font-size: 14px; max-width: 70ch; }
+  code { font-size: 12.5px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; direction: ltr; unicode-bidi: embed; display: inline-block; max-width: 100%; overflow-x: auto; white-space: nowrap; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <span class="logo" data-t="logo">Atelier Noor</span>
+      <a class="lang" id="lang-switch" href="?lang=ar">العربية</a>
+    </header>
+
+    <section class="hero">
+      <h1 data-t="h1">Scents for every mood and moment</h1>
+      <p data-t="lead">Not sure where to start? Tap “Find your scent” and our assistant will suggest three perfumes and a layering idea in under a minute.</p>
+    </section>
+
+    <section class="grid" aria-label="Featured">
+      <article class="tile"><div class="swatch" style="background:#e2b4bf">RN</div><div class="meta"><h3 data-t="p1">Rose Nocturne</h3><p data-t="p1s">Floral · AED 420</p></div></article>
+      <article class="tile"><div class="swatch" style="background:#e6d584">CS</div><div class="meta"><h3 data-t="p2">Citrus Shore</h3><p data-t="p2s">Fresh · AED 290</p></div></article>
+      <article class="tile"><div class="swatch" style="background:#b39a82">OA</div><div class="meta"><h3 data-t="p3">Oud Amberwood</h3><p data-t="p3s">Woody · AED 560</p></div></article>
+    </section>
+
+    <section class="note">
+      <p data-t="proto">This page is a prototype store. The perfumes, prices and images come from a small seed catalogue, and some prices are estimates. The assistant is embedded with one script tag:</p>
+      <p><code>&lt;script src="/widget.js" data-lang="en" data-brand=""&gt;&lt;/script&gt;</code></p>
+    </section>
+  </div>
+
+<script>
+  (function () {
+    var params = new URLSearchParams(location.search);
+    var lang = params.get('lang') === 'ar' ? 'ar' : 'en';
+    var AR = {
+      logo: 'أتيليه نور',
+      h1: 'عطور لكل مزاج ولكل لحظة',
+      lead: 'لست متأكداً من أين تبدأ؟ اضغط على «اعثر على عطرك» وسيقترح عليك المساعد ثلاثة عطور وفكرة للمزج في أقل من دقيقة.',
+      p1: 'وردة الليل', p1s: 'زهري · 420 درهم',
+      p2: 'شاطئ الحمضيات', p2s: 'منعش · 290 درهم',
+      p3: 'عود وعنبر', p3s: 'خشبي · 560 درهم',
+      proto: 'هذه الصفحة متجر تجريبي. العطور والأسعار والصور مأخوذة من كتالوج أولي صغير، وبعض الأسعار تقديرية. يُضمَّن المساعد بسطر برمجي واحد:'
+    };
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+    if (lang === 'ar') {
+      document.querySelectorAll('[data-t]').forEach(function (el) {
+        var v = AR[el.getAttribute('data-t')];
+        if (v) el.textContent = v;
+      });
+    }
+    var sw = document.getElementById('lang-switch');
+    var other = lang === 'ar' ? 'en' : 'ar';
+    params.set('lang', other);
+    sw.href = '?' + params.toString();
+    sw.textContent = other === 'ar' ? 'العربية' : 'English';
+    sw.lang = other;
+
+    var s = document.createElement('script');
+    s.src = '/widget.js';
+    s.setAttribute('data-lang', lang);
+    s.setAttribute('data-brand', params.get('brand') || '');
+    document.body.appendChild(s);
+  })();
+</script>
+</body>
+</html>

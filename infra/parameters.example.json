@@ -1,0 +1,70 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "value": "uaenorth"
+    },
+    "resourceGroupName": {
+      "value": "rg-perfume-agent-mvp"
+    },
+    "baseName": {
+      "value": "perfumeagent"
+    },
+    "tags": {
+      "value": {
+        "project": "perfume-agent-mvp",
+        "environment": "disposable",
+        "owner": "srivatsam",
+        "expires": "2026-10-05",
+        "managed-by": "bicep",
+        "repo": "srivatsam/careem-design-companion"
+      }
+    },
+    "deployAcr": {
+      "value": false
+    },
+    "registryServer": {
+      "value": ""
+    },
+    "registryUsername": {
+      "value": ""
+    },
+    "registryPassword": {
+      "value": ""
+    },
+    "containerImage": {
+      "value": "ghcr.io/srivatsam/perfume-agent:latest"
+    },
+    "azureOpenAiEndpoint": {
+      "value": "https://<your-aoai-resource>.openai.azure.com"
+    },
+    "azureOpenAiChatDeployment": {
+      "value": "gpt-4o-mini"
+    },
+    "azureOpenAiEmbedDeployment": {
+      "value": ""
+    },
+    "azureOpenAiImageDeployment": {
+      "value": ""
+    },
+    "azureOpenAiApiVersion": {
+      "value": "2024-10-21"
+    },
+    "azureOpenAiApiKey": {
+      "value": "<set-at-deploy-time-never-commit>"
+    },
+    "adminToken": {
+      "value": "<set-at-deploy-time-never-commit>"
+    },
+    "brandFilter": {
+      "value": ""
+    },
+    "defaultLang": {
+      "value": "en"
+    },
+    "revisionSuffix": {
+      "value": ""
+    }
+  }
+}
