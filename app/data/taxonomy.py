@@ -37,6 +37,7 @@ def clean_note(raw: str) -> str:
     return text
 
 
+@lru_cache(maxsize=50000)
 def normalise_note(raw: str) -> str | None:
     """Returns the master note for a raw note string, or None if unknown."""
     text = clean_note(raw)

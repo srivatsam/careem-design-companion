@@ -23,6 +23,13 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# A local .env (same keys as .env.example) is enough on a laptop: no need to export anything.
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [[ -f "$ROOT_DIR/.env" ]]; then
+  set -a; # shellcheck disable=SC1091
+  source "$ROOT_DIR/.env"; set +a
+fi
+
 AZ_SUBSCRIPTION="${AZ_SUBSCRIPTION:-}"
 AZ_LOCATION="${AZ_LOCATION:-uaenorth}"
 RG="${RG:-rg-perfume-agent-mvp}"
@@ -197,6 +204,10 @@ if [[ "$DEPLOY_ACR" == "true" ]]; then
     log "Step 2: image $IMAGE already exists; skipping build"
   else
     log "Step 2: building $IMAGE with ACR Tasks (the build runs in Azure, not locally)"
+    # Best effort: bake the Kaggle catalogue into the image when it is not already in data/raw.
+    if ! ls "$ROOT_DIR"/data/raw/*.csv >/dev/null 2>&1 && [[ "${SKIP_KAGGLE:-}" != "1" ]]; then
+      (cd "$ROOT_DIR" && scripts/fetch_kaggle.sh) || echo "kaggle download skipped; deploying with the seed catalogue"
+    fi
     az acr build --registry "$ACR_NAME" --image "${ACR_IMAGE_REPO}:${IMAGE_TAG}" --file Dockerfile . --only-show-errors
   fi
 else

@@ -44,7 +44,10 @@ if [[ "$count" -eq 0 ]]; then
 
   shopt -s nullglob
   raw=(data/raw/*.csv)
+  cleaned=(data/raw/*cleaned*.csv)
   shopt -u nullglob
+  # The Kaggle zip ships a raw and a cleaned file of the same perfumes; import only the cleaned one when present.
+  if [[ ${#cleaned[@]} -gt 0 ]]; then raw=("${cleaned[@]}"); fi
   for csv in ${raw[@]+"${raw[@]}"}; do
     echo "[entrypoint] importing $csv"
     # A bad optional CSV must not stop the app from booting on the seed catalogue.
