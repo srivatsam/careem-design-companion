@@ -15,35 +15,42 @@ removed by deleting that group. Every resource and the group itself carry these 
 What gets created (`main.bicep` -> `resources.bicep`):
 
 - Log Analytics workspace (PerGB2018, 30-day retention)
+- Azure Container Registry, **Standard** SKU, admin user disabled, **anonymous pull enabled**, zone redundancy off
+  (`deployAcr=true`, the default)
 - Storage account (Standard_LRS, TLS 1.2, no public blob access) with file share `appdata` (5 GB)
 - Container Apps environment (consumption) with the share registered as storage `appdata` (SMB, ReadWrite)
 - Container App `ca-perfumeagent`: external HTTPS-only ingress on 8000, 0-1 replicas, 0.5 vCPU / 1 GiB,
   `/data` mounted from the share (SQLite at `/data/app.db`, image cache at `/data/images`), single revision mode,
-  a new revision per deploy (suffix derived from the image tag)
-- Only with `deployAcr=true` (opt-in): Azure Container Registry (Basic, admin user disabled) and a user-assigned
-  managed identity with **AcrPull** on it
+  a new revision per deploy (suffix derived from the image tag). No registry credentials: it pulls anonymously.
 
+No managed identity and no role assignments, so the deploying identity needs only **Contributor**.
 The only subscription-scope object is the resource group itself. Nothing touches any other group.
 
 ## Image source
 
-**Default: GitHub Container Registry.** The deploy workflow builds the Dockerfile on the GitHub runner and pushes
-`ghcr.io/srivatsam/perfume-agent:<short sha>` and `:latest` using `GITHUB_TOKEN`. The Container App then pulls it:
+**Default: Azure Container Registry in the same group, anonymous pull.** `deploy.sh` (and the deploy workflow):
 
-- **Public package (recommended, the repo is public anyway):** after the first workflow run, open
-  GitHub > your profile > Packages > `perfume-agent` > Package settings > Change visibility > Public. Do this once.
-  GitHub has no REST API for changing package visibility. The app then pulls anonymously; no registry credential
-  is stored anywhere.
-- **Private package:** create a classic PAT with only `read:packages` and store it as the `GHCR_PULL_TOKEN` secret.
-  `deploy.sh` then configures the Container App registry `ghcr.io` with user `srivatsam` and that token (secret
-  `registry-password`).
+1. On the first run, deploys everything with the public placeholder `mcr.microsoft.com/k8se/quickstart:latest`, so
+   the registry exists before any image does.
+2. Runs `az acr update --anonymous-pull-enabled true` (Bicep already sets it; this is a safety net).
+3. Runs `az acr build --registry <acr> --image perfume-agent:<git short sha> .`. The build runs **in Azure** (ACR
+   Tasks), so no local Docker is needed. It uploads the working tree minus `.dockerignore`, so a Kaggle CSV in
+   `data/raw/` is baked into the image. The build is skipped if the tag already exists.
+4. Deploys `<acr>.azurecr.io/perfume-agent:<tag>`. The app pulls without credentials.
 
-Until the package is public or `GHCR_PULL_TOKEN` is set, the new revision fails to pull and the app will not start.
+Anonymous pull is registry-wide: **anyone who knows the login server can pull the image**, including the app code
+(public on GitHub anyway) and any Kaggle CSV baked into it. That is acceptable for this disposable MVP. If it is not,
+use the ghcr.io option with a private package and `GHCR_PULL_TOKEN`. Some subscription types (free trial) block
+ACR Tasks; use the ghcr.io option there too.
 
-**Opt-in: Azure Container Registry** (`DEPLOY_ACR=true`, `IMAGE` unset). `deploy.sh` first deploys with the public
-placeholder `mcr.microsoft.com/k8se/quickstart:latest` to create the registry, builds in Azure with `az acr build`
-(ACR Tasks, no local Docker), then deploys the real image, pulled with the managed identity. This path creates a
-role assignment, so the deploying identity also needs User Access Administrator (or Owner) on the resource group.
+**Override: any prebuilt image** (`IMAGE=...`, no ACR; `deployAcr=false`). The deploy workflow's manual run with
+`registry=ghcr` builds on the GitHub runner, pushes `ghcr.io/srivatsam/perfume-agent:<sha>` and `:latest` with
+`GITHUB_TOKEN`, and deploys it:
+
+- **Public package:** after the first push, GitHub > Packages > `perfume-agent` > Package settings > Change
+  visibility > Public, done once. GitHub has no REST API for this.
+- **Private package:** set `GHCR_PULL_TOKEN` (classic PAT with only `read:packages`). The app then uses registry
+  `ghcr.io`, user `srivatsam` and that token (Container App secret `registry-password`).
 
 ## Prerequisites
 
@@ -54,8 +61,8 @@ role assignment, so the deploying identity also needs User Access Administrator 
 
 ## Permissions and one-time setup
 
-With the default ghcr.io image source the deploying identity needs **Contributor on the subscription** and nothing
-else. That covers creating the group, the deployment, and registering resource providers.
+The deploying identity needs **Contributor on the subscription** and nothing else. That covers creating the group,
+the deployment, registering resource providers, `az acr build` and `az acr update`.
 
 ```bash
 SUB=$(az account show --query id -o tsv)
@@ -75,17 +82,13 @@ anyway would only be a no-op tag update.
 
 ```bash
 RG=rg-perfume-agent-mvp
-for ns in Microsoft.App Microsoft.OperationalInsights Microsoft.Storage; do az provider register --namespace $ns --wait; done
+for ns in Microsoft.App Microsoft.OperationalInsights Microsoft.Storage Microsoft.ContainerRegistry; do az provider register --namespace $ns --wait; done
 az group create --name $RG --location uaenorth --tags \
   project=perfume-agent-mvp environment=disposable owner=srivatsam expires=2026-10-05 \
   managed-by=bicep repo=srivatsam/careem-design-companion
 az ad sp create-for-rbac --name sp-perfume-agent-mvp --role Contributor \
   --scopes $(az group show --name $RG --query id -o tsv) --sdk-auth
 ```
-
-For the ACR opt-in, also run
-`az role assignment create --assignee-object-id <sp object id> --assignee-principal-type ServicePrincipal --role "User Access Administrator" --scope <group id>`
-and register `Microsoft.ContainerRegistry` and `Microsoft.ManagedIdentity`.
 
 <details>
 <summary>Alternative login: OIDC (no stored Azure secret)</summary>
@@ -121,7 +124,7 @@ echo "AZURE_CLIENT_ID=$APP_ID AZURE_TENANT_ID=$(az account show --query tenantId
 | `AZURE_OPENAI_ENDPOINT` | **yes** | `https://<resource>.openai.azure.com` |
 | `AZURE_OPENAI_API_KEY` | **yes** | stored in the app as secret `azure-openai-api-key` |
 | `AZURE_OPENAI_CHAT_DEPLOYMENT` | **yes** | e.g. `gpt-4o-mini` |
-| `GHCR_PULL_TOKEN` | no | PAT with `read:packages`; only if the ghcr.io package stays private |
+| `GHCR_PULL_TOKEN` | no | ghcr option only: PAT with `read:packages` if the package stays private |
 | `AZURE_OPENAI_EMBED_DEPLOYMENT` | no | blank disables semantic scoring |
 | `AZURE_OPENAI_IMAGE_DEPLOYMENT` | no | image-generation deployment |
 | `ADMIN_TOKEN` | no | protects `/api/admin/*`; if unset the running app's token is reused, else one is generated (masked in logs) |
@@ -129,7 +132,7 @@ echo "AZURE_CLIENT_ID=$APP_ID AZURE_TENANT_ID=$(az account show --query tenantId
 | `AZURE_SUBSCRIPTION_ID` | no | overrides the subscription from the login; required only for OIDC |
 | `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` | no | only for the OIDC alternative |
 
-`GITHUB_TOKEN` (automatic) pushes the image. Optional repository variables: `BRAND_FILTER`, `DEPLOY_SCOPE`
+`GITHUB_TOKEN` (automatic) pushes the image for the ghcr option. Optional repository variables: `BRAND_FILTER`, `DEPLOY_SCOPE`
 (`group` for the least-privilege variant).
 
 ## Deploy from a laptop
@@ -142,10 +145,9 @@ export AZURE_OPENAI_API_KEY=<key>
 export AZURE_OPENAI_CHAT_DEPLOYMENT=gpt-4o-mini
 export AZURE_OPENAI_EMBED_DEPLOYMENT=text-embedding-3-small   # optional
 
-# Image: any of
-export IMAGE=ghcr.io/srivatsam/perfume-agent:<sha>   # a tag the workflow pushed (default: :latest)
-# export GHCR_PULL_TOKEN=<pat>                       # if the package is private
-# export DEPLOY_ACR=true; unset IMAGE                # build in your own ACR instead (needs role-assignment rights)
+# Default: build in the group's ACR. Or override with a prebuilt image:
+# export IMAGE=ghcr.io/srivatsam/perfume-agent:<sha>
+# export GHCR_PULL_TOKEN=<pat>                   # if that package is private
 
 infra/deploy.sh
 ```
@@ -153,9 +155,8 @@ infra/deploy.sh
 `deploy.sh` is safe to re-run:
 
 0. Registers the resource providers it needs (a warning if it lacks the rights).
-1. ACR path only: if the registry does not exist yet, deploys everything with the placeholder image.
-2. ACR path only: `az acr build` builds the Dockerfile **in Azure** (skipped if the tag exists). Some subscription
-   types (free trial) block ACR Tasks.
+1. ACR path: if the registry does not exist yet, deploys everything with the placeholder image.
+2. ACR path: enables anonymous pull, then `az acr build` builds the Dockerfile **in Azure** (skipped if the tag exists).
 3. Deploys the image with a new revision suffix, then prints the URL and an admin curl.
 
 Deployment names are fixed (`perfume-agent-mvp-app-<region>`, plus `...-bootstrap-<region>` on the ACR path), so the
@@ -190,15 +191,15 @@ the schedule to fire. Cron has no year field, so it fires every 6 October until 
 
 ## Cost (rough, USD)
 
+- ACR Standard: about **0.67 / day** (~20 / month), billed while the registry exists. This is most of the bill.
+  ACR Tasks builds add a few cents each.
 - Container Apps (consumption, scale to zero): usually **0**. The monthly free grant (180k vCPU-s, 360k GiB-s,
   2M requests) covers light MVP use.
-- ghcr.io: free for public packages.
 - Storage (file share, a few MB used): **cents**.
 - Log Analytics: first 5 GB / month ingestion is free per billing account; a small app stays under **1**.
-- ACR opt-in only: Basic is about **5 / month** (~0.17 / day), plus a few cents per ACR Tasks build.
+- ghcr.io option instead of ACR: free for public packages, total well under 1 / week.
 
-One week with the default setup costs well under 1 USD (about 1 to 2 USD with ACR). Deleting the group stops all
-charges.
+One week with the default setup costs about 5 USD. Deleting the group stops all charges.
 
 ## Known caveats
 

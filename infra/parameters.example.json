@@ -22,7 +22,7 @@
       }
     },
     "deployAcr": {
-      "value": false
+      "value": true
     },
     "registryServer": {
       "value": ""
@@ -34,7 +34,7 @@
       "value": ""
     },
     "containerImage": {
-      "value": "ghcr.io/srivatsam/perfume-agent:latest"
+      "value": "mcr.microsoft.com/k8se/quickstart:latest"
     },
     "azureOpenAiEndpoint": {
       "value": "https://<your-aoai-resource>.openai.azure.com"

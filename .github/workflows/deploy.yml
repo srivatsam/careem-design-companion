@@ -11,6 +11,14 @@ on:
         description: Image tag (defaults to the commit short sha)
         required: false
         default: ''
+      registry:
+        description: "Image source: acr (build in the group's Azure Container Registry) or ghcr (build here, push to ghcr.io)"
+        required: false
+        type: choice
+        options:
+          - acr
+          - ghcr
+        default: acr
   push:
     branches:
       - claude/dreamy-faraday-3vhoig
@@ -29,7 +37,7 @@ concurrency:
 
 permissions:
   contents: read
-  packages: write   # push the image to ghcr.io with GITHUB_TOKEN
+  packages: write   # only used by the ghcr option (push with GITHUB_TOKEN)
   id-token: write   # only needed for the OIDC login path
 
 jobs:
@@ -38,10 +46,12 @@ jobs:
     timeout-minutes: 45
     env:
       HAS_AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS != '' }}
+      USE_GHCR: ${{ inputs.registry == 'ghcr' }}
     steps:
       - uses: actions/checkout@v4
 
-      # Optional: bake the Kaggle catalogue into the image. Never fails the workflow.
+      # Optional: put the Kaggle CSV into data/raw/ so it is part of the build context (az acr build uploads
+      # the working tree minus .dockerignore) and gets baked into the image. Never fails the workflow.
       - name: Fetch Kaggle dataset (optional)
         continue-on-error: true
         env:
@@ -49,7 +59,9 @@ jobs:
           KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
         run: scripts/fetch_kaggle.sh || echo "kaggle download skipped"
 
+      # ---- ghcr option only (workflow_dispatch with registry=ghcr) ----------------------------------------
       - name: Image name
+        if: env.USE_GHCR == 'true'
         id: image
         env:
           INPUT_TAG: ${{ inputs.image_tag }}
@@ -60,8 +72,10 @@ jobs:
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@v3
+        if: env.USE_GHCR == 'true'
 
       - uses: docker/login-action@v3
+        if: env.USE_GHCR == 'true'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -71,6 +85,7 @@ jobs:
       # (GitHub > Packages > perfume-agent > Package settings > Change visibility; there is no REST API for this),
       # or set the GHCR_PULL_TOKEN secret so the Container App pulls with credentials.
       - name: Build and push image
+        if: env.USE_GHCR == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -103,10 +118,13 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      # Default: deploy.sh creates the ACR, runs `az acr build` in Azure and deploys from it (anonymous pull).
+      # ghcr option: IMAGE is set, so deploy.sh skips the ACR and deploys the pushed image.
       - name: Deploy
         env:
-          IMAGE: ${{ steps.image.outputs.repo }}:${{ steps.image.outputs.tag }}
-          GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}          # optional; empty = anonymous pull (public package)
+          IMAGE: ${{ env.USE_GHCR == 'true' && format('{0}:{1}', steps.image.outputs.repo, steps.image.outputs.tag) || '' }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}          # ghcr option only; empty = public package
           GHCR_USERNAME: ${{ github.repository_owner }}
           AZ_SUBSCRIPTION: ${{ secrets.AZURE_SUBSCRIPTION_ID }}    # optional; empty = subscription from the login
           AZ_LOCATION: ${{ inputs.location || 'uaenorth' }}
@@ -118,4 +136,8 @@ jobs:
           ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
           BRAND_FILTER: ${{ vars.BRAND_FILTER }}
           DEPLOY_SCOPE: ${{ vars.DEPLOY_SCOPE }}   # blank = subscription; 'group' for least privilege
-        run: infra/deploy.sh
+        run: |
+          # Empty values (push trigger, blank inputs) fall back to deploy.sh defaults.
+          [ -n "$IMAGE" ] || unset IMAGE
+          [ -n "$IMAGE_TAG" ] || unset IMAGE_TAG
+          infra/deploy.sh
