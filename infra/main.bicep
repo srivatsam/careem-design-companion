@@ -24,10 +24,10 @@ param tags object = {
   repo: 'srivatsam/careem-design-companion'
 }
 
-@description('Create an Azure Container Registry pulled via managed identity + AcrPull (needs role-assignment rights). Default false: pull from ghcr.io.')
-param deployAcr bool = false
+@description('Create an Azure Container Registry (Standard, anonymous pull, admin user disabled) in the group; the app pulls without credentials. Set false for an external image (e.g. ghcr.io).')
+param deployAcr bool = true
 
-@description('External registry server for a private image (e.g. ghcr.io). Leave empty for a public image.')
+@description('Registry server for a private external image (e.g. ghcr.io). Leave empty for anonymous pull.')
 param registryServer string = ''
 
 @description('External registry username (e.g. the GitHub user owning the package).')
@@ -115,6 +115,3 @@ output containerAppFqdn string = resources.outputs.containerAppFqdn
 output containerAppName string = resources.outputs.containerAppName
 output acrLoginServer string = resources.outputs.acrLoginServer
 output acrName string = resources.outputs.acrName
-output identityId string = resources.outputs.identityId
-output identityPrincipalId string = resources.outputs.identityPrincipalId
-output identityClientId string = resources.outputs.identityClientId

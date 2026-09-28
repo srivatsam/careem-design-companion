@@ -6,12 +6,13 @@
 #   export AZURE_OPENAI_CHAT_DEPLOYMENT=gpt-4o-mini
 #   infra/deploy.sh
 #
-# Image source (pick one):
-#   IMAGE=ghcr.io/srivatsam/perfume-agent:<tag>   use a prebuilt image (the GitHub workflow sets this)
-#   (unset, DEPLOY_ACR unset)                     default: ghcr.io/srivatsam/perfume-agent:latest
-#   DEPLOY_ACR=true (IMAGE unset)                 create an ACR, build there with `az acr build`, pull via
-#                                                 managed identity + AcrPull (needs role-assignment rights)
-# Private ghcr.io package: export GHCR_PULL_TOKEN=<PAT with read:packages> (GHCR_USERNAME defaults to srivatsam).
+# Image source:
+#   default (IMAGE unset)   create an Azure Container Registry (Standard, anonymous pull, admin user disabled) in the
+#                           group, build there with `az acr build` (runs in Azure), deploy <acr>.azurecr.io/perfume-agent:<tag>.
+#                           The app pulls anonymously, so Contributor is enough (no identity, no role assignment).
+#   IMAGE=<any image>       override: deploy that image, no ACR (e.g. ghcr.io/srivatsam/perfume-agent:<sha>).
+#                           Private ghcr.io package: also export GHCR_PULL_TOKEN=<PAT with read:packages>
+#                           (GHCR_USERNAME defaults to srivatsam).
 #
 # Optional: AZ_SUBSCRIPTION (defaults to the logged-in subscription), AZ_LOCATION (uaenorth),
 #           RG (rg-perfume-agent-mvp), BASE_NAME (perfumeagent), AZURE_OPENAI_EMBED_DEPLOYMENT,
@@ -27,9 +28,7 @@ AZ_LOCATION="${AZ_LOCATION:-uaenorth}"
 RG="${RG:-rg-perfume-agent-mvp}"
 BASE_NAME="${BASE_NAME:-perfumeagent}"
 DEPLOY_SCOPE="${DEPLOY_SCOPE:-subscription}"
-DEPLOY_ACR="${DEPLOY_ACR:-false}"
 IMAGE="${IMAGE:-}"
-GHCR_IMAGE_REPO="${GHCR_IMAGE_REPO:-ghcr.io/srivatsam/perfume-agent}"
 GHCR_USERNAME="${GHCR_USERNAME:-srivatsam}"
 GHCR_PULL_TOKEN="${GHCR_PULL_TOKEN:-}"
 AZURE_OPENAI_API_VERSION="${AZURE_OPENAI_API_VERSION:-2024-10-21}"
@@ -50,12 +49,10 @@ for v in AZURE_OPENAI_ENDPOINT AZURE_OPENAI_API_KEY AZURE_OPENAI_CHAT_DEPLOYMENT
   [[ -n "${!v:-}" ]] || die "$v is required (export it before running)."
 done
 [[ "$DEPLOY_SCOPE" == "subscription" || "$DEPLOY_SCOPE" == "group" ]] || die "DEPLOY_SCOPE must be subscription or group"
-[[ "$DEPLOY_ACR" == "true" || "$DEPLOY_ACR" == "false" ]] || die "DEPLOY_ACR must be true or false"
 command -v python3 >/dev/null || die "python3 is required (used to write the temporary parameters file)."
 
-if [[ -z "$IMAGE" && "$DEPLOY_ACR" != "true" ]]; then
-  IMAGE="${GHCR_IMAGE_REPO}:latest"
-fi
+# ACR is the default image source; an explicit IMAGE skips it.
+if [[ -n "$IMAGE" ]]; then DEPLOY_ACR=false; else DEPLOY_ACR=true; fi
 
 # ---- login ------------------------------------------------------------------
 if ! az account show --only-show-errors >/dev/null 2>&1; then
@@ -71,7 +68,7 @@ echo "Resource group: $RG ($AZ_LOCATION), scope: $DEPLOY_SCOPE, ACR: $DEPLOY_ACR
 # ---- step 0: resource providers ----------------------------------------------
 log "Step 0: ensuring resource providers are registered"
 providers=(Microsoft.App Microsoft.OperationalInsights Microsoft.Storage)
-[[ "$DEPLOY_ACR" == "true" ]] && providers+=(Microsoft.ContainerRegistry Microsoft.ManagedIdentity)
+[[ "$DEPLOY_ACR" == "true" ]] && providers+=(Microsoft.ContainerRegistry)
 for ns in "${providers[@]}"; do
   state="$(az provider show --namespace "$ns" --query registrationState -o tsv 2>/dev/null || echo Unknown)"
   if [[ "$state" != "Registered" ]]; then
@@ -177,8 +174,8 @@ if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
   [[ -n "$GHCR_PULL_TOKEN" ]] && echo "::add-mask::$GHCR_PULL_TOKEN"
 fi
 
-# ---- ACR path only: bootstrap the registry and build the image in Azure -------
-if [[ -z "$IMAGE" ]]; then
+# ---- ACR path (default): bootstrap the registry and build the image in Azure ---
+if [[ "$DEPLOY_ACR" == "true" ]]; then
   ACR_NAME=""
   if az group show --name "$RG" >/dev/null 2>&1; then
     ACR_NAME="$(az acr list --resource-group "$RG" --query '[0].name' -o tsv 2>/dev/null || true)"
@@ -192,6 +189,8 @@ if [[ -z "$IMAGE" ]]; then
     log "Step 1: skipped (registry $ACR_NAME already exists; step 3 reconciles all infrastructure)"
   fi
   ACR_LOGIN_SERVER="$(az acr show --name "$ACR_NAME" --query loginServer -o tsv)"
+  # Belt and braces: Bicep already sets this; the Container App has no registry credentials and relies on it.
+  az acr update --name "$ACR_NAME" --anonymous-pull-enabled true --only-show-errors >/dev/null
   IMAGE="${ACR_LOGIN_SERVER}/${ACR_IMAGE_REPO}:${IMAGE_TAG}"
 
   if az acr repository show-tags --name "$ACR_NAME" --repository "$ACR_IMAGE_REPO" -o tsv 2>/dev/null | grep -qx "$IMAGE_TAG"; then
@@ -201,7 +200,7 @@ if [[ -z "$IMAGE" ]]; then
     az acr build --registry "$ACR_NAME" --image "${ACR_IMAGE_REPO}:${IMAGE_TAG}" --file Dockerfile . --only-show-errors
   fi
 else
-  log "Steps 1-2: skipped (using prebuilt image $IMAGE)"
+  log "Steps 1-2: skipped (IMAGE override: $IMAGE; no ACR)"
 fi
 
 # ---- step 3: deploy the image --------------------------------------------------

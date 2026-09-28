@@ -16,9 +16,9 @@ param azureOpenAiApiKey string
 param adminToken string
 param brandFilter string
 param defaultLang string
-@description('Create an Azure Container Registry and pull from it with a user-assigned identity (AcrPull). Needs role-assignment rights. Default: pull from an external registry such as ghcr.io.')
-param deployAcr bool = false
-@description('External registry server for a private image, e.g. ghcr.io. Empty (with deployAcr false) means anonymous pull of a public image.')
+@description('Create an Azure Container Registry (Standard, anonymous pull, admin user disabled) in this group. The app pulls from it without credentials, so no identity or role assignment is needed. Set false when the image lives elsewhere (e.g. ghcr.io).')
+param deployAcr bool = true
+@description('Registry server for a private image, e.g. ghcr.io. Empty means anonymous pull (the ACR, or a public image).')
 param registryServer string = ''
 @description('External registry username, e.g. the GitHub user owning the package.')
 param registryUsername string = ''
@@ -35,13 +35,12 @@ var storageName = take('st${take(replace(baseName, '-', ''), 9)}${suffix}', 24)
 var shareName = 'appdata'
 var envStorageName = 'appdata'
 var containerAppName = take('ca-${baseName}', 32)
-var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
 var appPort = 8000
 
 // The public quickstart placeholder listens on 80 and has no /api/health; the real image listens on 8000.
 var isPlaceholderImage = startsWith(containerImage, 'mcr.microsoft.com/k8se/quickstart')
 var ingressPort = isPlaceholderImage ? 80 : appPort
-var useRegistryCredential = !deployAcr && !empty(registryServer) && !empty(registryUsername) && !empty(registryPassword)
+var useRegistryCredential = !empty(registryServer) && !empty(registryUsername) && !empty(registryPassword)
 
 resource logs 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: 'log-${baseName}'
@@ -55,15 +54,19 @@ resource logs 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   }
 }
 
-resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = if (deployAcr) {
+// Anonymous (unauthenticated) pull lets the Container App pull without credentials, so the deploying
+// principal needs only Contributor. Anyone who knows the login server can pull the image.
+resource acr 'Microsoft.ContainerRegistry/registries@2025-04-01' = if (deployAcr) {
   name: acrName
   location: location
   tags: tags
   sku: {
-    name: 'Basic'
+    name: 'Standard' // anonymous pull requires Standard or Premium
   }
   properties: {
     adminUserEnabled: false
+    anonymousPullEnabled: true
+    zoneRedundancy: 'Disabled'
   }
 }
 
@@ -126,22 +129,6 @@ resource envStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' = {
   }
 }
 
-resource identity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = if (deployAcr) {
-  name: 'id-${baseName}'
-  location: location
-  tags: tags
-}
-
-resource acrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployAcr) {
-  name: guid(acr.id, identity.id, acrPullRoleId)
-  scope: acr
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', acrPullRoleId)
-    principalId: identity!.properties.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
 var baseEnv = [
   { name: 'LLM_PROVIDER', value: 'azure' }
   { name: 'AZURE_OPENAI_ENDPOINT', value: azureOpenAiEndpoint }
@@ -191,16 +178,6 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
   name: containerAppName
   location: location
   tags: tags
-  identity: deployAcr
-    ? {
-        type: 'UserAssigned'
-        userAssignedIdentities: {
-          '${identity.id}': {}
-        }
-      }
-    : {
-        type: 'None'
-      }
   properties: {
     managedEnvironmentId: env.id
     configuration: {
@@ -211,23 +188,17 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
         transport: 'auto'
         allowInsecure: false
       }
-      // ACR via managed identity (opt-in), a private external registry via password, or none (public image).
-      registries: deployAcr
+      // No registry entry = anonymous pull (the ACR above, or any public image).
+      // A credential is configured only for a private external registry such as ghcr.io.
+      registries: useRegistryCredential
         ? [
             {
-              server: acr!.properties.loginServer
-              identity: identity.id
+              server: registryServer
+              username: registryUsername
+              passwordSecretRef: 'registry-password'
             }
           ]
-        : useRegistryCredential
-            ? [
-                {
-                  server: registryServer
-                  username: registryUsername
-                  passwordSecretRef: 'registry-password'
-                }
-              ]
-            : []
+        : []
       secrets: concat(
         [
           {
@@ -277,15 +248,9 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
       ]
     }
   }
-  dependsOn: [
-    acrPull
-  ]
 }
 
 output containerAppFqdn string = app.properties.configuration.ingress.fqdn
 output containerAppName string = app.name
 output acrLoginServer string = deployAcr ? acr!.properties.loginServer : ''
 output acrName string = deployAcr ? acr.name : ''
-output identityId string = deployAcr ? identity.id : ''
-output identityPrincipalId string = deployAcr ? identity!.properties.principalId : ''
-output identityClientId string = deployAcr ? identity!.properties.clientId : ''

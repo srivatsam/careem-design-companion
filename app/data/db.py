@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import threading
 import time
@@ -130,7 +131,10 @@ def connect(path: str | None = None) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path), check_same_thread=False, timeout=30)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
+    # WAL is unreliable on SMB shares (the Azure Files mount at /data), so use rollback journaling there.
+    default_mode = "DELETE" if str(db_path).startswith("/data") else "WAL"
+    conn.execute(f"PRAGMA journal_mode={os.environ.get('SQLITE_JOURNAL_MODE', default_mode)}")
+    conn.execute("PRAGMA busy_timeout=30000")
     conn.execute("PRAGMA foreign_keys=ON")
     conn.executescript(SCHEMA)
     return conn
