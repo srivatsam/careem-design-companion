@@ -3,13 +3,10 @@ name: Tear down Azure MVP
 # Deletes ONLY the resource group rg-perfume-agent-mvp, and only if it is tagged
 # project=perfume-agent-mvp and environment=disposable (checked by infra/teardown.sh).
 #
-# The schedule fires at 03:00 UTC on 6 October, one day after the expires=2026-10-05 tag.
-# GitHub cron has no year field, so it fires EVERY YEAR on that date until this workflow is removed
-# (harmless if the group is already gone: the script exits 0).
+# Runs only when started by hand (Actions > Tear down Azure MVP > Run workflow).
+# The scheduled run was removed on 2026-09-29: the environment stays up until the owner decides to remove it.
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 3 6 10 *'
 
 concurrency:
   group: perfume-agent-mvp-azure
