@@ -292,8 +292,8 @@ def says_yes(text: str) -> bool:
 # the shopper's message as an answer to the pending question FIRST, deterministically and independently of the
 # model, and only then falls back to the generic free-text extraction -- constrained by that question's topic.
 
-GUIDED_TOPICS = ("recipient", "occasion", "liked_scents", "disliked_scents", "strength", "budget",
-                 "anchor_feedback", "other")
+GUIDED_TOPICS = ("recipient", "scenario", "scenario_moment", "occasion", "liked_scents", "disliked_scents",
+                 "strength", "budget", "anchor_feedback", "other")
 
 # Answers that store nothing but still count the topic as asked.
 _SKIP_OPTION_IDS = {"skip", "none", "no_budget", "nothing"}
@@ -441,6 +441,14 @@ def interpret_guided_answer(text: str, pending: dict | None) -> TasteProfile:
         return extract_profile(text)
 
     options = (pending or {}).get("options") or []
+    if topic in ("scenario", "scenario_moment"):
+        # Scenario titles are whole phrases (some hold a comma or an "and"), so they are matched as phrases by the
+        # scenario library rather than split into fragments like note chips.
+        if _SKIP_RE.match(text) or any(_norm(o.get("id")) in _SKIP_OPTION_IDS and _norm(text) in
+                                       {_norm(o.get("id")), _norm(o.get("label"))} for o in options):
+            return TasteProfile(free_text=text)
+        from app.data import scenarios as sc
+        return sc.interpret_answer(text, pending, topic)
     pairs = [(_match_option(part, options), part) for part in _split_answer(text)]
     answers = [(opt, part) for opt, part in pairs if not _is_skip(opt, part)]
     prof = TasteProfile(free_text=text)

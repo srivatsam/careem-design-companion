@@ -25,6 +25,8 @@ class TasteProfile(BaseModel):
     brand: Optional[str] = None
     gender: Optional[str] = None                              # women | men | unisex
     guided_for: Optional[str] = None                          # self | gift_her | gift_him | gift_unsure (guided match)
+    scenarios: list[str] = Field(default_factory=list)        # scenario ids the shopper pictured (app.data.scenarios)
+    moments: list[str] = Field(default_factory=list)          # follow-up moment ids within those scenarios
     free_text: str = ""                                       # accumulated user wording, for semantic matching
 
     def merge(self, other: "TasteProfile") -> "TasteProfile":
@@ -95,6 +97,10 @@ class LayeringSuggestion(BaseModel):
 class Chip(BaseModel):
     id: str      # less_sweet | fresher | cheaper | stronger | lighter | more_like:<perfume_id>
     label: str
+    # Optional card fields, sent only with guided match's scenario and moment options (older clients ignore them).
+    caption: Optional[str] = None      # one-line sub-caption under the label
+    motif: Optional[str] = None        # one of app.data.scenarios.MOTIFS; the widget draws it from a static table
+    family: Optional[str] = None       # the scent-family colour key for the card (one of the eight families)
 
 
 class QuizQuestion(BaseModel):
@@ -105,8 +111,9 @@ class QuizQuestion(BaseModel):
     ask_reason: Optional[str] = None   # short "why I'm asking" hint (guided match)
     index: Optional[int] = None        # 1-based question number, guided match only
     max_index: Optional[int] = None    # max questions in this guided run (5)
-    topic: Optional[str] = None        # recipient | occasion | liked_scents | disliked_scents | strength |
-                                        # budget | anchor_feedback | other -- lets guided match track which
+    topic: Optional[str] = None        # recipient | scenario | scenario_moment | occasion | liked_scents |
+                                        # disliked_scents | strength | budget | anchor_feedback | other --
+                                        # lets guided match track which
                                         # topics were already asked so a model-authored question never repeats one
 
 

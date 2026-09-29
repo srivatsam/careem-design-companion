@@ -143,6 +143,8 @@ _PROFILE_RE = re.compile(r"Current taste profile \(JSON\): (\{.*\})\n")
 _FORCE_RE = re.compile(r"Do NOT ask another question this turn")
 # The server's "this message answers THIS question" instruction (llm_agent.instructions pending_line).
 _PENDING_RE = re.compile(r"The shopper is answering: .*?\(topic: ([a-z_]+)\)")
+# The moments the shopper picked in guided match (llm_agent.instructions feel_line).
+_FEEL_RE = re.compile(r"The shopper wants to feel \(moments they picked\): (.+)\n")
 
 
 def _guided_state(system_instructions: str | None) -> tuple[bool, int, int]:
@@ -164,6 +166,12 @@ def _profile_from_instructions(system_instructions: str | None) -> TasteProfile:
         return TasteProfile(**data)
     except (TypeError, ValueError):
         return TasteProfile()
+
+
+def _feel(system_instructions: str | None) -> str | None:
+    """The first moment the shopper picked, so the closing reply can name it the way a real model would."""
+    m = _FEEL_RE.search(system_instructions or "")
+    return m.group(1).split(" | ")[0].strip() if m else None
 
 
 def _pending_topic(system_instructions: str | None) -> str | None:
@@ -223,7 +231,8 @@ _GUIDED_Q_TABLE: dict[str, dict] = {
     "occasion": dict(reply={"en": "What's the occasion?", "ar": "ما المناسبة؟"},
                      quick_replies={"en": ["Everyday", "The office", "Evening out", "A special date"],
                                     "ar": ["يومي", "العمل", "سهرة", "موعد خاص"]},
-                     multi_select=False, applies=lambda p: not p.occasions and not p.moods, topic="occasion"),
+                     multi_select=False, applies=lambda p: not p.occasions and not p.moods and not p.scenarios,
+                     topic="occasion"),
     "loved": dict(reply={"en": "Which scents do you love?", "ar": "ما الروائح التي تحبها؟"},
                  quick_replies={"en": ["Vanilla", "Oud", "Rose", "Citrus"], "ar": ["فانيليا", "عود", "ورد", "حمضيات"]},
                  multi_select=True, applies=lambda p: not p.liked_notes, topic="liked_scents"),
@@ -349,9 +358,16 @@ class MockModel(Model):
                 # returned") and fixing itself, so the retry path can be tested offline.
                 picks[-1] = {"perfume_id": UNGROUNDED_ID, "reason": "Invented pick for testing."}
             first = top[0]
-            reply = (f"هذه الخيارات تناسب ما وصفته. أقترح البدء بـ {first['name']} من {first.get('brand')}."
-                     if arabic else
-                     f"These three share what you described. I would start with {first['name']} by {first.get('brand')}.")
+            feel = _feel(system_instructions)
+            if feel:
+                reply = (f"هذه الخيارات تليق بـ«{feel}». أقترح البدء بـ {first['name']} من {first.get('brand')}."
+                         if arabic else
+                         f"For \u201c{feel}\u201d, these three carry the mood. I would start with {first['name']} by "
+                         f"{first.get('brand')}.")
+            else:
+                reply = (f"هذه الخيارات تناسب ما وصفته. أقترح البدء بـ {first['name']} من {first.get('brand')}."
+                         if arabic else
+                         f"These three share what you described. I would start with {first['name']} by {first.get('brand')}.")
             updates = {}
             if name == "search_perfumes":
                 updates = {k: v for k, v in args.items() if k != "text" and v not in (None, [], "")}

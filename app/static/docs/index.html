@@ -540,8 +540,12 @@
     </ol>
 
     <h3>Guided match</h3>
-    <p>The first question, “who is this for?”, is served instantly with no model call. After that the model writes each
-      question itself, with two to six tappable answers, and each answer is read against the question that was asked.
+    <p>The first question, “who is this for?”, is served instantly with no model call. The next two are instant too:
+      the shopper picks up to three moments they picture, such as “Barefoot on a beach at sunset” or “Walking into a
+      rooftop party”, then one follow-up moment for the first of them. A small scenario library maps each moment onto
+      notes, families, moods and a strength level, and the same library reads scenario-like wording in free chat.
+      After that the model writes each remaining question itself, with two to six tappable answers, and each answer
+      is read against the question that was asked.
       The server tracks which topics have been covered so a question is never repeated, and holds recommendations back
       until the shopper has answered at least two questions beyond the first and given at least two real taste signals.
       Recipient or gender alone never counts. Five questions is the cap, and the shopper can ask for picks at any point

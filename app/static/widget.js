@@ -98,6 +98,10 @@
       guidedSkip: 'Skip',
       guidedShowPicks: 'Show my picks now',
       guidedWhatLearned: 'What I learned',
+      scenarioContinue: 'Continue with {n}',
+      somethingElse: 'Something else',
+      somethingElseSub: 'Describe your moment in your own words',
+      placeholderMoment: 'Describe your moment…',
       resultsTitle: 'Your top picks',
       match: 'match',
       matchFmt: '{n}% match',
@@ -173,6 +177,10 @@
       guidedSkip: 'تخطي',
       guidedShowPicks: 'اعرض اختياراتي الآن',
       guidedWhatLearned: 'ما تعلمته عنك',
+      scenarioContinue: 'متابعة ({n})',
+      somethingElse: 'لحظة أخرى',
+      somethingElseSub: 'صف لحظتك بكلماتك',
+      placeholderMoment: 'صف لحظتك…',
       resultsTitle: 'أفضل اختياراتك',
       match: 'تطابق',
       matchFmt: 'تطابق {n}%',
@@ -227,8 +235,63 @@
     quiz: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 9.5l1.5 1.5L12 8.5M8 15h8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     chat: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-8l-4 3.5V16H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>',
     info: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 11v5M12 8h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
-    layers: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l8 4-8 4-8-4zM4 12l8 4 8-4M4 16l8 4 8-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>'
+    layers: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l8 4-8 4-8-4zM4 12l8 4 8-4M4 16l8 4 8-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>',
+    check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12.5l4 4 8-9" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    pencil: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19h4L19.5 8.5a2.1 2.1 0 0 0-3-3L6 16z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14.5 7.5l2 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>'
   };
+
+  // Scenario motifs for guided match's moment cards: small abstract drawings in the card's family colour
+  // (--fam fills, --fam-i lines). Static markup only; the server names a motif by key and nothing else, and an
+  // unknown key simply leaves the tile as a plain colour swatch.
+  var MOTIFS = (function () {
+    var F = 'var(--fam)', I = 'var(--fam-i)';
+    function svg(body) { return '<svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">' + body + '</svg>'; }
+    function ring(n, shape) {
+      var out = '';
+      for (var k = 0; k < n; k++) out += shape.replace('{r}', 'rotate(' + (k * 360 / n) + ' 24 24)');
+      return out;
+    }
+    function star(cx, cy, r, fill, op) {
+      var a = r * 0.28;
+      return '<path d="M' + cx + ' ' + (cy - r) + 'C' + (cx + a) + ' ' + (cy - a) + ' ' + (cx + a) + ' ' + (cy - a) + ' ' + (cx + r) + ' ' + cy +
+        'C' + (cx + a) + ' ' + (cy + a) + ' ' + (cx + a) + ' ' + (cy + a) + ' ' + cx + ' ' + (cy + r) +
+        'C' + (cx - a) + ' ' + (cy + a) + ' ' + (cx - a) + ' ' + (cy + a) + ' ' + (cx - r) + ' ' + cy +
+        'C' + (cx - a) + ' ' + (cy - a) + ' ' + (cx - a) + ' ' + (cy - a) + ' ' + cx + ' ' + (cy - r) + 'z" fill="' + fill + '" opacity="' + (op || 1) + '"/>';
+    }
+    var wave = function (y) {
+      return '<path d="M6 ' + y + 'c3 0 3-2.6 6-2.6s3 2.6 6 2.6 3-2.6 6-2.6 3 2.6 6 2.6 3-2.6 6-2.6 3 2.6 6 2.6" fill="none" stroke="' + I + '" stroke-width="2.4" stroke-linecap="round"/>';
+    };
+    return {
+      sun_waves: svg('<path d="M14 29a10 10 0 0 1 20 0z" fill="' + F + '"/>' +
+        '<path d="M24 11v3M12.5 16.5l2 2M35.5 16.5l-2 2M8 26h3M37 26h3" stroke="' + F + '" stroke-width="2.4" stroke-linecap="round"/>' +
+        wave(35) + '<g opacity=".55">' + wave(41) + '</g>'),
+      sparkle: svg(star(21, 20, 13, F) + star(35, 34, 6.5, I, 0.8) + '<circle cx="11" cy="36" r="2.2" fill="' + I + '" opacity=".55"/>' +
+        '<circle cx="38" cy="11" r="1.8" fill="' + F + '" opacity=".7"/>'),
+      flame: svg('<path d="M24 5c2.2 7.2 11.5 11 11.5 21.5a11.5 11.5 0 0 1-23 0c0-5.2 2.7-8.3 5.2-10.8.4 3.5 2 5.6 4.3 6.6C21 15.8 22 10.4 24 5z" fill="' + F + '"/>' +
+        '<path d="M24 25.5c1.3 3.1 5.2 4.6 5.2 8.5a5.2 5.2 0 0 1-10.4 0c0-2.7 1.7-4.1 3.1-5.2.2 1.5.9 2.3 1.7 2.7-.1-2.5.1-4.1.4-6z" fill="#fff" opacity=".6"/>'),
+      petals: svg('<g fill="' + F + '" opacity=".88">' + ring(5, '<ellipse cx="24" cy="13.5" rx="6.4" ry="9.5" transform="{r}"/>') + '</g>' +
+        '<circle cx="24" cy="24" r="5" fill="' + I + '"/><circle cx="22.4" cy="22.4" r="1.6" fill="#fff" opacity=".6"/>'),
+      candle: svg('<circle cx="24" cy="15" r="11" fill="' + F + '" opacity=".2"/>' +
+        '<path d="M24 5.5c2.8 3.8 4.3 6.4 4.3 9a4.3 4.3 0 0 1-8.6 0c0-2.6 1.5-5.2 4.3-9z" fill="' + F + '"/>' +
+        '<path d="M24 19v4" stroke="' + I + '" stroke-width="2" stroke-linecap="round"/>' +
+        '<rect x="17" y="23" width="14" height="20" rx="3.5" fill="' + I + '"/><path d="M20 27v10" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".45"/>'),
+      linen: svg('<path d="M5 11h38" stroke="' + I + '" stroke-width="2.4" stroke-linecap="round"/>' +
+        '<path d="M11 11h26v22c-2.2 0-3.2 2.6-6.5 2.6S26.2 33 24 33s-3.2 2.6-6.5 2.6S13.2 33 11 33z" fill="' + F + '"/>' +
+        '<path d="M19 14v15M29 14v15" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".5"/>' +
+        '<rect x="15" y="8" width="3.5" height="7" rx="1.2" fill="' + I + '"/><rect x="29.5" y="8" width="3.5" height="7" rx="1.2" fill="' + I + '"/>'),
+      briefcase: svg('<path d="M18 16v-3.2A3.2 3.2 0 0 1 21.2 9.6h5.6a3.2 3.2 0 0 1 3.2 3.2V16" fill="none" stroke="' + I + '" stroke-width="2.6"/>' +
+        '<rect x="7" y="16" width="34" height="23" rx="5" fill="' + F + '"/><path d="M7 26h34" stroke="#fff" stroke-width="2" opacity=".45"/>' +
+        '<rect x="20.5" y="23" width="7" height="6" rx="1.8" fill="' + I + '"/>'),
+      spice: svg('<g fill="' + F + '">' + ring(8, '<ellipse cx="24" cy="12.5" rx="3.6" ry="8.2" transform="{r}"/>') + '</g>' +
+        '<g fill="' + I + '" opacity=".75">' + ring(8, '<circle cx="24" cy="15" r="1.5" transform="{r}"/>') + '</g>' +
+        '<circle cx="24" cy="24" r="3.4" fill="' + I + '"/>'),
+      citrus: svg('<circle cx="24" cy="24" r="17" fill="' + F + '"/><circle cx="24" cy="24" r="13.4" fill="#fff" opacity=".62"/>' +
+        '<g fill="' + F + '" opacity=".78">' + ring(8, '<path d="M24 24L24.9 12.3A11.8 11.8 0 0 1 31.7 15.2z" transform="{r}"/>') + '</g>' +
+        '<circle cx="24" cy="24" r="1.8" fill="#fff"/>'),
+      moon_stars: svg('<path d="M27 8.5a15.5 15.5 0 1 0 13 23.2A12.6 12.6 0 0 1 27 8.5z" fill="' + F + '"/>' +
+        star(38.5, 12, 5, I, 0.85) + star(10, 12, 3.4, I, 0.6) + '<circle cx="40" cy="24" r="1.6" fill="' + I + '" opacity=".6"/>')
+    };
+  })();
 
   // The signature motif: eight abstract bottles walking the spectrum, one per scent family. Purely decorative,
   // built here from static markup (no server strings ever reach innerHTML).
@@ -707,6 +770,57 @@
     '.q{margin:0;font-family:var(--font-display);font-size:19px;font-weight:700;letter-spacing:-.018em;line-height:1.28;color:var(--ink);text-wrap:balance}',
     '.q:lang(ar){letter-spacing:0;line-height:1.5}',
     '.row-end{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px}',
+    // ---- scenario cards (guided Q2 "pick the moments", Q3 "which moment"): a family-tinted card grid
+    '.psa[data-mode=page] .card.quiz.scn-q{max-width:880px}',
+    '.scn{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));grid-auto-rows:1fr;gap:10px}',
+    '.scard{position:relative;display:block;width:100%;height:100%;min-height:96px;padding:12px;border-radius:var(--r-3);',
+    'border:1px solid var(--border);color:var(--ink);text-align:start;box-shadow:var(--sh-1);',
+    'background:radial-gradient(140% 120% at 100% 0%,var(--fam-t),transparent 64%),var(--surface-solid);',
+    'transition:transform var(--t-1) var(--ease),border-color var(--t-1) var(--ease),box-shadow var(--t-1) var(--ease),background var(--t-1) var(--ease)}',
+    '[dir=rtl] .scard{background:radial-gradient(140% 120% at 0% 0%,var(--fam-t),transparent 64%),var(--surface-solid)}',
+    '.scard:focus-visible{border-radius:var(--r-3)}',
+    '.scard-art{float:right;width:36px;height:36px;margin:-3px -3px 4px 8px;border-radius:11px;display:grid;place-items:center;',
+    'background:linear-gradient(150deg,var(--fam-s),var(--fam-t));box-shadow:inset 0 0 0 1px var(--fam-b)}',
+    '[dir=rtl] .scard-art{float:left;margin:-3px 8px 4px -3px}',
+    '.scard-art svg{width:30px;height:30px}',
+    '.scard b{display:block;font-family:var(--font-display);font-size:14px;font-weight:700;line-height:1.3;letter-spacing:-.01em;overflow-wrap:normal}',
+    '.scard b:lang(ar){letter-spacing:0;line-height:1.45}',
+    '.scard small{display:block;margin-top:4px;font-size:12.5px;line-height:1.4;color:var(--ink-2)}',
+    '.scard-check{position:absolute;top:6px;inset-inline-end:6px;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;',
+    'background:var(--fam-i);color:var(--surface-solid);box-shadow:0 0 0 2px var(--surface-solid);opacity:0;transform:scale(.5);',
+    'transition:opacity var(--t-1) var(--ease),transform var(--t-2) var(--ease)}',
+    '.scard-check svg{width:14px;height:14px}',
+    '@media (hover:hover){.scard:hover:not([aria-disabled=true]):not(:disabled){transform:translateY(-2px);border-color:var(--fam-b);box-shadow:var(--sh-2)}}',
+    // chosen: the card fills with its family tint and wears a check
+    '.scard[aria-pressed=true]{background:var(--fam-t);border-color:var(--fam-i);',
+    'box-shadow:0 0 0 1px var(--fam-i),0 8px 20px color-mix(in srgb,var(--fam) 28%,transparent)}',
+    '.scard[aria-pressed=true] b{color:var(--fam-i)}',
+    '.scard[aria-pressed=true] .scard-check{opacity:1;transform:none}',
+    '.scard[aria-disabled=true]{opacity:.48;cursor:default;box-shadow:none}',
+    '.scard:disabled{opacity:.5;box-shadow:none}',
+    // "something else": a quiet dashed card that hands over to the composer
+    '.scard.other{border-style:dashed;border-color:var(--brand-line);background:transparent;box-shadow:none}',
+    '.scard.other .scard-art{background:var(--brand-soft);box-shadow:none;color:var(--brand-2)}',
+    '.scard.other .scard-art svg{width:20px;height:20px}',
+    // the entrance: a short stagger on arrival only (a re-render after a tap never replays it)
+    '.psa-in .scard{animation:psa-rise var(--t-3) var(--ease) both;animation-delay:calc(var(--i,0) * 32ms)}',
+    // Q3 moments: fewer, larger cards, three across
+    '.scn.big{grid-template-columns:repeat(3,1fr);gap:12px}',
+    '.scn.big .scard{min-height:128px;padding:14px}',
+    '.scn.big .scard-art{float:none;width:48px;height:48px;margin:0 0 10px;border-radius:14px}',
+    '.scn.big .scard-art svg{width:38px;height:38px}',
+    '.scn.big .scard b{font-size:15.5px}',
+    '.scn.big .scard small{font-size:13px}',
+    // the grid follows the question card's own width (phone, 420px floating panel, or the wide page column)
+    '.scn-q{container:scn / inline-size}',
+    '@container scn (max-width:520px){',
+    '.scn{grid-template-columns:1fr 1fr;gap:8px}',
+    '.scn.big{grid-template-columns:1fr;gap:8px}',
+    '.scn.big .scard{display:flex;align-items:center;gap:13px;min-height:78px;padding:12px 14px}',
+    '.scn.big .scard-art{flex:none;margin:0;width:46px;height:46px}',
+    '.scn.big .scard-txt{flex:1;min-width:0}',
+    '.scn.big .scard b{font-size:15px}',
+    '}',
     // ---- buttons
     '.btn{min-height:var(--tap);padding:9px 20px;border-radius:999px;border:1px solid transparent;font-size:14px;font-weight:650;display:inline-flex;',
     'align-items:center;justify-content:center;gap:7px;text-decoration:none;white-space:nowrap;',
@@ -841,6 +955,9 @@
     // ---- "what I learned"
     '.tags.learned{margin:0 2px}',
     '.tags.learned .tag{background:var(--brand-soft);border-color:var(--brand-line);color:var(--ink-2);font-weight:600;padding-inline-start:9px}',
+    // the moment the shopper pictured leads the summary, framed by the brand gradient
+    '.tags.learned .tag[data-k=feel]{border-color:transparent;color:var(--ink);',
+    'background:linear-gradient(var(--surface-solid),var(--surface-solid)) padding-box,var(--grad) border-box}',
     // ---- consent + composer
     '.consent{display:flex;align-items:center;flex-wrap:wrap;gap:9px 12px;margin:0 12px 10px;padding:13px 15px;border-radius:var(--r-3);font-size:14px;',
     'background:var(--surface-solid);border:1px solid var(--brand-line);box-shadow:var(--sh-2)}',
@@ -880,10 +997,10 @@
     // ================================================================ touch
     // No 300ms delay, no double-tap zoom, no grey flash. Touch gets a press state instead of hover, and
     // every hover flourish is neutralised so a tap does not leave a card stuck in its hover pose.
-    'button,a,input,summary,.chip,.starter,.tab,.tbtn,.btn,.more,.link{touch-action:manipulation}',
+    'button,a,input,summary,.chip,.scard,.starter,.tab,.tbtn,.btn,.more,.link{touch-action:manipulation}',
     'button,a,input,summary{-webkit-tap-highlight-color:transparent}',
     '@media (hover:none){',
-    '.chip:active:not(:disabled),.starter:active:not(:disabled),.btn:active:not(:disabled),',
+    '.chip:active:not(:disabled),.starter:active:not(:disabled),.btn:active:not(:disabled),.scard:active:not(:disabled):not([aria-disabled=true]),',
     '.start:active:not(:disabled),.tbtn:active,.send:active:not(:disabled),.launcher:active{transform:scale(.97)}',
     '.launcher:hover{transform:none;box-shadow:var(--sh-brand)}',
     '.start:hover{transform:none;box-shadow:var(--sh-brand)}',
@@ -954,6 +1071,15 @@
     '.quiz .row-end{justify-content:stretch;gap:8px;padding-top:11px}',
     '.quiz .row-end .btn{flex:1 1 calc(50% - 4px);min-height:46px;padding-inline:12px}',
     '.quiz .row-end .primary{flex:1 1 100%}',
+    // scenario cards on a phone: compact type so two across never truncates a title
+    '.scard{min-height:88px;padding:10px 11px}',
+    '.scard b{font-size:13.5px;line-height:1.24}',
+    '.scard b:lang(ar){line-height:1.36}',
+    '.scard small{font-size:12px;line-height:1.34;margin-top:3px}',
+    '.scard small:lang(ar){line-height:1.45}',
+    '.scard-art{width:28px;height:28px;border-radius:9px}',
+    '.scard-art svg{width:24px;height:24px}',
+    '.scn.big .scard{padding:12px 14px}',
     // picks: the compact tile card, tightened, with a real tap target on Details
     '.psa[data-mode=page] .picks{gap:14px}',
     '.psa[data-mode=page] .pick{padding:12px}',
@@ -1038,7 +1164,7 @@
     // ---- motion is a courtesy, never a toll
     '@media (prefers-reduced-motion:reduce){.psa *,.psa *::before,.psa *::after{',
     'animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important;scroll-behavior:auto!important}',
-    '.panel::before,.media.ld::after{animation:none!important}}'
+    '.panel::before,.media.ld::after{animation:none!important}.psa .scard{animation-delay:0s!important}}'
   ].join('\n');
 
   // ---------------------------------------------------------------- shell
@@ -1355,9 +1481,16 @@
     request('/api/guide/start', function () { return { session_id: S.sessionId, lang: S.lang }; }, t('guidedThinking'));
   }
 
+  var SCENARIO_MAX = 3;
+  function isScenarioQuestion(q) {
+    return (q.topic === 'scenario' || q.topic === 'scenario_moment') &&
+      (q.options || []).some(function (c) { return c.motif || c.caption; });
+  }
+
   function renderGuided(e) {
     var q = e.question, sel = e.sel || [], multi = !!q.multi;
     var i = q.index || 1, n = q.max_index || 5;
+    var cards = isScenarioQuestion(q);
     var kids = [
       h('div', { class: 'progress' }, [
         h('span', null, t('quizProgress', { i: i, n: n })),
@@ -1366,7 +1499,8 @@
       h('p', { class: 'q' }, q.question)
     ];
     if (q.ask_reason) kids.push(h('p', { class: 'note' }, [h('span', { icon: 'info' }), q.ask_reason]));
-    kids.push(h('div', { class: 'chips', role: 'group', 'aria-label': q.question }, (q.options || []).map(function (c) {
+    if (cards) kids.push(renderScenarioCards(e));
+    else kids.push(h('div', { class: 'chips', role: 'group', 'aria-label': q.question }, (q.options || []).map(function (c) {
       // an answer that names a note, an accord or a mood wears that family's colour
       var fam = textFamily(c.id) || textFamily(c.label);
       if (multi) {
@@ -1383,24 +1517,79 @@
     })));
     var actions = [];
     if (multi) {
+      // the scenario grid counts what is chosen, so the shopper sees the pick before sending it
+      var label = cards && sel.length ? t('scenarioContinue', { n: sel.length }) : t('guidedContinue');
       actions.push(h('button', {
-        class: 'btn primary', type: 'button', disabled: S.busy || !sel.length,
+        class: 'btn primary', type: 'button', 'data-continue': '', disabled: S.busy || !sel.length,
         onclick: function () { sendGuidedAnswer(e, (q.options || []).filter(function (c) { return sel.indexOf(c.id) >= 0; })); }
-      }, t('guidedContinue')));
+      }, label));
     }
     actions.push(h('button', { class: 'btn ghost', type: 'button', disabled: S.busy, onclick: function () { skipGuided(e); } }, t('guidedSkip')));
     if (i >= 2) {
       actions.push(h('button', { class: 'btn ghost', type: 'button', disabled: S.busy, onclick: showGuidedPicksNow }, t('guidedShowPicks')));
     }
     kids.push(h('div', { class: 'row-end' }, actions));
-    return h('div', { class: 'card quiz', 'data-guided-id': q.id }, kids);
+    return h('div', { class: 'card quiz' + (cards ? ' scn-q' : ''), 'data-guided-id': q.id }, kids);
+  }
+
+  // Scenario and moment cards: title, sub-caption and a motif in the card's family colour. Every string goes in
+  // as text; the motif comes from the static MOTIFS table by whitelisted key, the colour from the family list.
+  function renderScenarioCards(e) {
+    var q = e.question, sel = e.sel || [], multi = !!q.multi;
+    var big = q.topic === 'scenario_moment';
+    var full = multi && sel.length >= SCENARIO_MAX;
+    var items = (q.options || []).map(function (c, idx) {
+      var fam = FAMILIES.indexOf(c.family) >= 0 ? c.family : (textFamily(c.id) || textFamily(c.label) || null);
+      var art = h('span', { class: 'scard-art', 'aria-hidden': 'true' });
+      if (c.motif && Object.prototype.hasOwnProperty.call(MOTIFS, c.motif)) art.innerHTML = MOTIFS[c.motif];
+      var on = sel.indexOf(c.id) >= 0;
+      var blocked = full && !on;
+      return h('button', {
+        class: 'scard', type: 'button', 'data-id': c.id, 'data-fam': fam, style: '--i:' + idx,
+        'aria-pressed': multi ? String(on) : null, 'aria-disabled': blocked ? 'true' : null, disabled: S.busy,
+        onclick: function () {
+          if (multi) { if (!blocked) toggleGuidedChip(e, c.id); }
+          else sendGuidedAnswer(e, [c]);
+        }
+      }, [
+        art,
+        h('span', { class: 'scard-txt' }, [h('b', null, c.label || c.id), c.caption ? h('small', null, c.caption) : null]),
+        multi ? h('span', { class: 'scard-check', 'aria-hidden': 'true', icon: 'check' }) : null
+      ]);
+    });
+    if (big) {
+      // "Something else": the shopper describes their own moment in the composer; the server reads it as the
+      // answer to this question.
+      items.push(h('button', {
+        class: 'scard other', type: 'button', 'data-other': '', style: '--i:' + items.length, disabled: S.busy,
+        onclick: function () { describeOwnMoment(); }
+      }, [
+        h('span', { class: 'scard-art', 'aria-hidden': 'true', icon: 'pencil' }),
+        h('span', { class: 'scard-txt' }, [h('b', null, t('somethingElse')), h('small', null, t('somethingElseSub'))])
+      ]));
+    }
+    return h('div', { class: 'scn' + (big ? ' big' : ''), role: 'group', 'aria-label': q.question }, items);
+  }
+
+  function describeOwnMoment() {
+    if (S.busy) return;
+    track('guided_something_else', {});
+    R.input.setAttribute('placeholder', t('placeholderMoment'));
+    focusInput();
   }
 
   function toggleGuidedChip(e, id) {
     var sel = (e.sel || []).slice(), at = sel.indexOf(id);
     if (at >= 0) sel.splice(at, 1); else sel.push(id);
     e.sel = sel;
+    // a re-render replaces the buttons: keep keyboard focus on the one just toggled
+    var root0 = R.app.getRootNode ? R.app.getRootNode() : document;
+    var hadFocus = e.el && root0.activeElement && e.el.contains(root0.activeElement);
     refresh(e);
+    if (hadFocus && e.el) {
+      var nodes = e.el.querySelectorAll('[data-id]');
+      for (var k = 0; k < nodes.length; k++) if (nodes[k].getAttribute('data-id') === id) { nodes[k].focus({ preventScroll: true }); break; }
+    }
   }
 
   function sendGuidedAnswer(e, chosen) {
@@ -1461,6 +1650,7 @@
   }
 
   function sendChat(text, source) {
+    R.input.setAttribute('placeholder', t(narrow() ? 'placeholderShort' : 'placeholder'));
     markStart('chat');
     abandonGuided();
     push({ k: 'user', text: text });
@@ -1488,7 +1678,7 @@
   function setBusy(b, label) {
     S.busy = b;
     syncSend();
-    var nodes = R.list.querySelectorAll('.chip,.btn,.start,.starter');
+    var nodes = R.list.querySelectorAll('.chip,.scard,.btn,.start,.starter');
     for (var i = 0; i < nodes.length; i++) nodes[i].disabled = b;
     if (b && !typingEntry) typingEntry = push({ k: 'typing', label: label || null });
     if (!b && typingEntry) { removeEntry(typingEntry); typingEntry = null; }
@@ -1679,7 +1869,7 @@
       // Guided match's "what I learned" summary: small labelled tags built from the taste profile the
       // interview collected, shown once above the picks so the shopper sees where they came from.
       kids.push(h('ul', { class: 'tags learned', 'aria-label': t('guidedWhatLearned') }, r.profile_summary.map(function (c) {
-        return h('li', { class: 'tag' }, c.label);
+        return h('li', { class: 'tag', 'data-k': c.id === 'feel' ? 'feel' : null }, c.label);
       })));
     }
     kids.push(h('div', { class: 'rhead' }, h('h3', null, t('resultsTitle'))));

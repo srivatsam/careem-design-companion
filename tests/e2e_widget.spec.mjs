@@ -40,6 +40,17 @@ const T = {
     gReply: "Here's what I learned about you, and three picks that fit.",
     gSummary: [['for', 'For: me'], ['loves', 'Loves: vanilla, rose']],
     gShowPicksReply: 'Here are three picks from what you told me so far.',
+    gScen: 'Pick the moments you want this scent for', gScenHint: 'Choose up to three.',
+    gScenOpts: [['beach', 'Barefoot on a beach at sunset', 'Salt air, warm skin, golden light', 'sun_waves', 'aquatic'],
+      ['rooftop', 'Walking into a rooftop party', 'City lights and every eye on you', 'sparkle', 'amber'],
+      ['fireside', 'Wrapped in cashmere by the fire', 'Soft, warm and close to the skin', 'flame', 'gourmand'],
+      ['garden', 'A spring garden in full bloom', 'Fresh petals and dewy green leaves', 'petals', 'floral'],
+      ['date', 'A candlelit first date', 'Close, warm and quietly unforgettable', 'candle', 'fruity']],
+    gMoment: 'Starting with the beach, which moment feels just right?',
+    gMomentOpts: [['beach_sunrise_swim', 'Sunrise swim, salty skin', 'Crisp, airy and barely there', 'sun_waves', 'aquatic'],
+      ['beach_golden_hour', 'Golden hour on the sand', 'Juicy fruit on sun-warmed skin', 'sun_waves', 'fruity'],
+      ['beach_island', 'A tropical island escape', 'Coconut, white flowers, soft vanilla', 'sun_waves', 'floral']],
+    gFeel: ['feel', 'Feel: Sunrise swim, salty skin · Walking into a rooftop party'],
   },
   ar: {
     greeting: 'مرحباً! أنا دليلك إلى العطور. لنجد عطراً تحبه.',
@@ -57,8 +68,23 @@ const T = {
     gReply: 'إليك ما تعلمته عنك، وثلاثة اختيارات تناسبك.',
     gSummary: [['for', 'لِـ: لي'], ['loves', 'يحب: فانيليا، ورد']],
     gShowPicksReply: 'إليك ثلاثة اختيارات بناءً على ما أخبرتني به حتى الآن.',
+    gScen: 'اختر اللحظات التي تريد أن يرافقك فيها هذا العطر', gScenHint: 'اختر حتى ثلاث لحظات.',
+    gScenOpts: [['beach', 'حافي القدمين على شاطئ الغروب', 'نسيم مالح وبشرة دافئة وضوء ذهبي', 'sun_waves', 'aquatic'],
+      ['rooftop', 'أدخل حفلة راقية على السطح', 'أضواء المدينة وكل الأنظار نحوك', 'sparkle', 'amber'],
+      ['fireside', 'ملتفّ بالكشمير قرب المدفأة', 'ناعم ودافئ وقريب من البشرة', 'flame', 'gourmand'],
+      ['garden', 'حديقة ربيعية في أوج تفتّحها', 'بتلات طازجة وأوراق خضراء ندية', 'petals', 'floral'],
+      ['date', 'موعد أول على ضوء الشموع', 'قريب ودافئ ولا يُنسى', 'candle', 'fruity']],
+    gMoment: 'لنبدأ مع أجواء الشاطئ: أي لحظة تبدو مثالية؟',
+    gMomentOpts: [['beach_sunrise_swim', 'سباحة الفجر وملح على البشرة', 'منعش وخفيف كالنسيم', 'sun_waves', 'aquatic'],
+      ['beach_golden_hour', 'الساعة الذهبية على الرمال', 'فاكهة عصيرية على بشرة دفّأتها الشمس', 'sun_waves', 'fruity'],
+      ['beach_island', 'هروب إلى جزيرة استوائية', 'جوز الهند وزهور بيضاء وفانيليا ناعمة', 'sun_waves', 'floral']],
+    gFeel: ['feel', 'الأجواء: سباحة الفجر وملح على البشرة · أدخل حفلة راقية على السطح'],
   },
 };
+
+// A hostile option: every field must render as plain text, the motif and colour keys are whitelisted.
+const HOSTILE_OPT = { id: 'x', label: '<b>Night</b> swim', caption: '<img src=x onerror="window.__pwned=1">',
+  motif: '<svg onload="window.__pwned=1">', family: 'javascript:alert(1)' };
 
 function quiz(lang) {
   const q = T[lang].q;
@@ -117,8 +143,22 @@ function guidedForQuestion(lang) {
 
 function guidedLovedQuestion(lang) {
   const L = T[lang];
-  return { id: 'guided_q', question: L.gLoved, multi: true, index: 2, max_index: 5, ask_reason: L.gReason,
+  return { id: 'guided_q', question: L.gLoved, multi: true, index: 3, max_index: 5, ask_reason: L.gReason,
           options: L.gLovedOpts.map(([id, label]) => ({ id, label })) };
+}
+
+const cardOpts = (list) => list.map(([id, label, caption, motif, family]) => ({ id, label, caption, motif, family }));
+
+function guidedScenarioQuestion(lang) {
+  const L = T[lang];
+  return { id: 'scenario', topic: 'scenario', question: L.gScen, multi: true, index: 2, max_index: 5, ask_reason: L.gScenHint,
+          options: [...cardOpts(L.gScenOpts), HOSTILE_OPT] };
+}
+
+function guidedMomentQuestion(lang) {
+  const L = T[lang];
+  return { id: 'scenario_moment', topic: 'scenario_moment', question: L.gMoment, multi: false, index: 3, max_index: 5,
+          options: cardOpts(L.gMomentOpts) };
 }
 
 function guidedReply(lang, sid, question, extra = {}) {
@@ -128,7 +168,8 @@ function guidedReply(lang, sid, question, extra = {}) {
 
 function guidedPicksReply(lang, sid, extra = {}) {
   const L = T[lang];
-  return picksReply(lang, sid, { reply: L.gReply, guided: true, profile_summary: L.gSummary.map(([id, label]) => ({ id, label })), ...extra });
+  const summary = [L.gSummary[0], L.gFeel, ...L.gSummary.slice(1)];
+  return picksReply(lang, sid, { reply: L.gReply, guided: true, profile_summary: summary.map(([id, label]) => ({ id, label })), ...extra });
 }
 
 // ------------------------------------------------------------------ mock backend
@@ -160,8 +201,13 @@ function mockApi(page, log) {
       if (/ask me/i.test(body.message)) {
         return json(200, { session_id: sid, language: lang, reply: 'Happy to help.', picks: [], layering: null, chips: [], next_question: { id: 'q', question: T[lang].ask, multi: false, options: T[lang].opts.map(([id, label]) => ({ id, label })) }, fallback_used: false, intent: 'chat', profile: {}, guided: false, profile_summary: [] });
       }
-      if (state.guidedStep === 1) { state.guidedStep = 2; return json(200, guidedReply(lang, sid, guidedLovedQuestion(lang))); }
-      if (state.guidedStep === 2) { state.guidedStep = 0; return json(200, guidedPicksReply(lang, sid)); }
+      // guided match: Q1 -> scenario cards -> moment cards -> picks; skipping the scenario grid falls back to an
+      // ordinary AI-written question (plain chips), as the server does
+      const skipped = /^(Skip|تخطي)$/.test(body.message);
+      if (state.guidedStep === 1) { state.guidedStep = 2; return json(200, guidedReply(lang, sid, guidedScenarioQuestion(lang))); }
+      if (state.guidedStep === 2 && skipped) { state.guidedStep = 4; return json(200, guidedReply(lang, sid, guidedLovedQuestion(lang))); }
+      if (state.guidedStep === 2) { state.guidedStep = 3; return json(200, guidedReply(lang, sid, guidedMomentQuestion(lang))); }
+      if (state.guidedStep === 3 || state.guidedStep === 4) { state.guidedStep = 0; return json(200, guidedPicksReply(lang, sid)); }
       return json(200, picksReply(lang, sid));
     }
     if (path === '/api/refine') return json(200, picksReply(lang, sid, { fallback_used: true, reply: lang === 'ar' ? 'أقل حلاوة، كما طلبت.' : 'Less sweet, as requested.' }));
@@ -181,23 +227,71 @@ const launch = () => chromium.launch(existsSync('/opt/pw-browsers/chromium') ? {
 const calls = (log, path, method = 'POST') => log.filter((c) => c.path === path && c.method === method);
 const eventNames = (log) => calls(log, '/api/events').map((c) => c.body.name);
 
-// Answers guided match's instant first question (single tap, sends immediately), then its second, AI-authored
-// question (multi-select: two chips + Continue), then waits for the picks. Exercises single-tap-send,
-// multi-select + Continue, the progress label, and the "what I learned" summary on the results card.
-async function runGuided(page, lang = 'en') {
+// Answers guided match's instant first question (single tap, sends immediately), then the scenario card grid
+// (multi-select up to 3, "Continue with n"), then the moment cards (single tap), then waits for the picks.
+// Exercises single-tap-send, multi-select + the cap, the progress label, the motif whitelist, text-only
+// rendering of server strings, "Something else", and the "what I learned" summary on the results card.
+async function runGuided(page, lang = 'en', shotPrefix = null) {
   const L = T[lang];
+  const ar = lang === 'ar';
   await page.locator('[data-start=guided]').click();
   const q1 = page.locator('.quiz').first();
   await q1.waitFor();
   await q1.locator('.chip').first().click();
-  const q2 = page.locator('.quiz').first();
+
+  // Q2: scenario cards
+  const q2 = page.locator('.quiz.scn-q').first();
   await q2.waitFor();
-  assert.match(await q2.textContent(), lang === 'ar' ? /من 5 كحد أقصى/ : /Question 2 of up to 5/, 'progress label shows question 2 of up to 5');
-  assert.ok((await q2.textContent()).includes(L.gReason), 'ask_reason hint renders');
-  await q2.locator('.chip').nth(0).click();
-  await q2.locator('.chip').nth(1).click();
-  await q2.locator('.btn.primary').click();
+  assert.match(await q2.textContent(), ar ? /السؤال 2 من 5 كحد أقصى/ : /Question 2 of up to 5/, 'progress label shows question 2 of up to 5');
+  assert.ok((await q2.textContent()).includes(L.gScenHint), 'the "up to three" hint renders');
+  const cards = q2.locator('.scard');
+  assert.equal(await cards.count(), L.gScenOpts.length + 1, 'one card per option');
+  assert.equal(await q2.locator('.chip').count(), 0, 'scenario options render as cards, not chips');
+  assert.equal(await cards.first().locator('.scard-art svg').count(), 1, 'a known motif draws its SVG');
+  assert.equal(await cards.first().getAttribute('data-fam'), 'aquatic', 'the card wears its family colour');
+  assert.ok((await cards.first().textContent()).includes(L.gScenOpts[0][2]), 'the sub-caption renders');
+  const hostile = q2.locator('.scard[data-id=x]');
+  assert.equal(await hostile.locator('.scard-art svg').count(), 0, 'an unknown motif draws nothing');
+  assert.equal(await hostile.getAttribute('data-fam'), null, 'an unknown family key is ignored');
+  assert.equal(await hostile.locator('b').textContent(), HOSTILE_OPT.label, 'labels are text, never markup');
+  assert.equal(await hostile.locator('img').count(), 0);
+  const cont = q2.locator('[data-continue]');
+  assert.equal(await cont.isDisabled(), true, 'Continue waits for a pick');
+  if (shotPrefix) {
+    await page.waitForTimeout(450);
+    await q2.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `${SHOT_DIR}/${shotPrefix}-q2.png` });
+  }
+  await cards.nth(0).click();
+  await q2.locator('.scard').nth(1).click();
+  assert.equal(await page.locator('.quiz.scn-q .scard').nth(0).getAttribute('aria-pressed'), 'true');
+  assert.equal((await page.locator('.quiz.scn-q [data-continue]').textContent()).trim(), ar ? 'متابعة (2)' : 'Continue with 2');
+  // the cap: a third pick is fine, a fourth is refused until one is released
+  await page.locator('.quiz.scn-q .scard').nth(2).click();
+  assert.equal(await page.locator('.quiz.scn-q .scard').nth(3).getAttribute('aria-disabled'), 'true', 'a fourth card is disabled at 3');
+  await page.locator('.quiz.scn-q .scard').nth(3).click({ force: true });
+  assert.equal(await page.locator('.quiz.scn-q .scard[aria-pressed=true]').count(), 3, 'never more than 3 chosen');
+  await page.locator('.quiz.scn-q .scard').nth(2).click();
+  assert.equal(await page.locator('.quiz.scn-q .scard[aria-pressed=true]').count(), 2);
+  if (shotPrefix) await page.screenshot({ path: `${SHOT_DIR}/${shotPrefix}-q2-selected.png` });
+  await page.locator('.quiz.scn-q [data-continue]').click();
+
+  // Q3: moment cards, one tap sends
+  const q3 = page.locator('.quiz.scn-q').first();
+  await q3.waitFor();
+  assert.ok((await q3.textContent()).includes(L.gMoment));
+  assert.equal(await q3.locator('.scn.big .scard:not(.other)').count(), 3);
+  assert.equal(await q3.locator('.scard[aria-pressed]').count(), 0, 'single-select moments carry no pressed state');
+  await q3.locator('[data-other]').click();
+  assert.equal(await page.locator('.input').getAttribute('placeholder'), ar ? 'صف لحظتك…' : 'Describe your moment…', '"Something else" hands over to the composer');
+  if (shotPrefix) {
+    await page.waitForTimeout(450);
+    await page.screenshot({ path: `${SHOT_DIR}/${shotPrefix}-q3.png` });
+  }
+  await q3.locator('.scard').first().click();
   await page.locator('[data-results]').first().waitFor();
+  const feel = page.locator('[data-results]').first().locator('.tags.learned .tag[data-k=feel]');
+  assert.equal((await feel.textContent()).trim(), L.gFeel[1], 'the Feel tag leads the summary');
 }
 
 // Skip (never repeats a question) and "Show my picks now" (available from question 2 onward).
@@ -214,9 +308,23 @@ async function guidedControlsFlow(browser) {
   await q1.waitFor();
   assert.equal(await page.locator('.quiz .btn', { hasText: 'Show my picks now' }).count(), 0, 'no show-picks-now on question 1');
   await q1.locator('.btn', { hasText: 'Skip' }).click();
-  const q2 = page.locator('.quiz').first();
+  const q2 = page.locator('.quiz.scn-q').first();
   await q2.waitFor();
-  assert.match(await q2.textContent(), /Which scents do you love\?/, 'skip advances to the next question, not a repeat');
+  assert.match(await q2.textContent(), /Pick the moments you want this scent for/, 'skip advances to the scenario cards');
+  // keyboard: Space toggles a card and focus stays on it through the re-render
+  await page.locator('.quiz.scn-q .scard').nth(1).focus();
+  await page.keyboard.press('Space');
+  assert.equal(await page.locator('.quiz.scn-q .scard').nth(1).getAttribute('aria-pressed'), 'true');
+  assert.equal(await page.evaluate(() => document.querySelector('#psa-widget-host').shadowRoot.activeElement.getAttribute('data-id')), 'rooftop', 'focus survives the toggle');
+  await page.keyboard.press('Enter');
+  assert.equal(await page.locator('.quiz.scn-q .scard').nth(1).getAttribute('aria-pressed'), 'false');
+  // desktop page mode: five across
+  const tops = await page.locator('.quiz.scn-q .scard').evaluateAll((els) => els.slice(0, 5).map((el) => Math.round(el.getBoundingClientRect().top)));
+  assert.equal(new Set(tops).size, 1, 'the first five cards share one row on desktop');
+  await page.locator('.quiz.scn-q .btn', { hasText: 'Skip' }).click();
+  const q3 = page.locator('.quiz:not(.scn-q)').first();
+  await q3.waitFor();
+  assert.match(await q3.textContent(), /Which scents do you love\?/, 'skipping the cards falls back to an ordinary question');
   await page.locator('.quiz .btn', { hasText: 'Show my picks now' }).click();
   await page.locator('[data-results]').first().waitFor();
   assert.equal(calls(log, '/api/guide/finish').length, 1, 'show-picks-now posts to /api/guide/finish');
@@ -246,15 +354,16 @@ async function mobileFlow(browser) {
   assert.deepEqual(calls(log, '/api/session')[0].body, { lang: 'en' });
 
   // guided match -> results
-  await runGuided(page);
+  await runGuided(page, 'en', 's-mobile-en');
   const startCall = calls(log, '/api/guide/start');
   assert.equal(startCall.length, 1, 'guide/start posted once');
   assert.deepEqual(startCall[0].body, { session_id: 'sess-123', lang: 'en' });
   assert.match(startCall[0].contentType, /application\/json/);
   const guidedChats = calls(log, '/api/chat');
-  assert.equal(guidedChats.length, 2, 'one /api/chat per guided answer');
+  assert.equal(guidedChats.length, 3, 'one /api/chat per guided answer');
   assert.deepEqual(guidedChats[0].body, { session_id: 'sess-123', message: 'For me', lang: 'en' });
-  assert.deepEqual(guidedChats[1].body, { session_id: 'sess-123', message: 'Vanilla, Rose', lang: 'en' });
+  assert.deepEqual(guidedChats[1].body, { session_id: 'sess-123', message: 'Barefoot on a beach at sunset, Walking into a rooftop party', lang: 'en' });
+  assert.deepEqual(guidedChats[2].body, { session_id: 'sess-123', message: 'Sunrise swim, salty skin', lang: 'en' });
   assert.equal(await page.locator('[data-results]').first().locator('.pick').count(), 3);
   assert.equal(await page.locator('[data-layer]').count(), 1);
   // "what I learned" summary tags above the picks
@@ -282,7 +391,7 @@ async function mobileFlow(browser) {
   await page.locator('[data-retry]').click();
   await page.waitForFunction(() => document.querySelector('#psa-widget-host').shadowRoot.querySelectorAll('[data-results]').length === 2);
   const chats = calls(log, '/api/chat');
-  assert.equal(chats.length, 4, '2 guided answers + 1 failed + 1 retried chat message');
+  assert.equal(chats.length, 5, '3 guided answers + 1 failed + 1 retried chat message');
   assert.deepEqual(chats.at(-1).body, { session_id: 'sess-123', message: 'Something warm for winter evenings', lang: 'en' });
   assert.equal(await page.locator('.send').isDisabled(), true, 'send disabled with empty input');
 
@@ -384,7 +493,7 @@ async function arabicFlow(browser, viewport, shot) {
   await launcher.click();
   await page.locator('[data-start=guided]').waitFor();
   assert.equal(calls(log, '/api/session')[0].body.lang, 'ar');
-  await runGuided(page, 'ar');
+  await runGuided(page, 'ar', viewport.width < 500 ? 's-mobile-ar' : null);
   assert.equal(calls(log, '/api/guide/start')[0].body.lang, 'ar');
   assert.equal(calls(log, '/api/chat')[0].body.lang, 'ar');
   assert.match(await page.locator('[data-results]').first().locator('.tags.learned').textContent(), /لِـ: لي/);

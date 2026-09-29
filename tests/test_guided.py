@@ -45,6 +45,14 @@ def _new_session(client, lang="en"):
     return client.post("/api/session", json={"lang": lang}).json()["session_id"]
 
 
+def _answer_for_and_skip_scenarios(client, sid, who="For me"):
+    """Q1, then skipping the instant scenario step: the rest of the interview runs exactly as it did before
+    scenarios existed. Returns the reply to the skip (the first model-written or rule-based question)."""
+    r = client.post("/api/chat", json={"session_id": sid, "message": who}).json()
+    assert r["next_question"]["topic"] == "scenario"
+    return client.post("/api/chat", json={"session_id": sid, "message": "Skip"}).json()
+
+
 # ---------------------------------------------------------------------------------------------------------------
 # Guided start: the first question is instant (id "guided_for"), no model call needed.
 # ---------------------------------------------------------------------------------------------------------------
@@ -77,7 +85,11 @@ def test_guided_gift_branch_asks_about_the_recipient(mock_client):
     r = mock_client.post("/api/chat", json={"session_id": sid, "message": "A gift for her"}).json()
     assert r["guided"] is True
     q = r["next_question"]
-    assert q is not None and q["index"] == 2 and q["max_index"] == 5
+    # Q2 is the instant scenario step, worded for the recipient.
+    assert q["topic"] == "scenario" and q["index"] == 2 and "her" in q["question"]
+    r = mock_client.post("/api/chat", json={"session_id": sid, "message": "Skip"}).json()
+    q = r["next_question"]
+    assert q is not None and q["index"] == 3 and q["max_index"] == 5
     assert 2 <= len(q["options"]) <= 6
     assert all(len(o["label"]) <= 40 for o in q["options"])
 
@@ -173,7 +185,7 @@ def test_guided_completes_with_rule_based_questions_when_llm_disabled(none_clien
     sid = _new_session(none_client)
     r = none_client.post("/api/guide/start", json={"session_id": sid}).json()
     assert r["next_question"]["id"] == "guided_for"
-    r = none_client.post("/api/chat", json={"session_id": sid, "message": "For me"}).json()
+    r = _answer_for_and_skip_scenarios(none_client, sid)
     assert r["next_question"] is not None
     assert r["next_question"]["id"] in ("liked_notes", "disliked_notes", "mood", "budget")
 
@@ -707,7 +719,7 @@ def test_guided_topic_repeat_is_replaced_with_a_rule_based_question_on_a_new_top
         return AgentRunResult(output=out, seen_ids=set(), tool_calls=[], profile=TasteProfile(guided_for="self"))
 
     monkeypatch.setattr(main_mod.llm_agent, "run_agent", fake_run_agent)
-    r1 = mock_client.post("/api/chat", json={"session_id": sid, "message": "For me"}).json()
+    r1 = _answer_for_and_skip_scenarios(mock_client, sid)
     assert r1["next_question"]["topic"] == "occasion"
 
     r2 = mock_client.post("/api/chat", json={"session_id": sid, "message": "Everyday"}).json()
@@ -889,7 +901,7 @@ def test_guided_answer_is_read_against_the_pending_question_end_to_end(none_clie
     strength and budget answers all reach the profile."""
     sid = _new_session(none_client)
     none_client.post("/api/guide/start", json={"session_id": sid})
-    r = none_client.post("/api/chat", json={"session_id": sid, "message": "For me"}).json()
+    r = _answer_for_and_skip_scenarios(none_client, sid)
     assert r["next_question"]["topic"] == "liked_scents"
     r = none_client.post("/api/chat", json={"session_id": sid, "message": "rose"}).json()
     assert r["profile"]["liked_notes"] == ["rose"]
@@ -921,7 +933,7 @@ def test_deterministic_reading_beats_the_models_profile_updates(mock_client, mon
                               profile=TasteProfile(guided_for="self", liked_notes=["vanilla"]))
 
     monkeypatch.setattr(main_mod.llm_agent, "run_agent", fake_run_agent)
-    r = mock_client.post("/api/chat", json={"session_id": sid, "message": "For me"}).json()
+    r = _answer_for_and_skip_scenarios(mock_client, sid)
     assert r["next_question"]["topic"] == "disliked_scents"
     r = mock_client.post("/api/chat", json={"session_id": sid, "message": "vanilla"}).json()
     assert r["profile"]["disliked_notes"] == ["vanilla"]
@@ -959,8 +971,10 @@ def test_pending_question_is_handed_to_the_model(mock_client, monkeypatch):
 
     monkeypatch.setattr(main_mod.llm_agent, "run_agent", spy)
     mock_client.post("/api/chat", json={"session_id": sid, "message": "For me"})
+    assert "pending" not in captured  # Q2 (the scenario cards) is instant: no model call
+    mock_client.post("/api/chat", json={"session_id": sid, "message": "Skip"})
     assert captured["pending"] is not None
-    assert captured["pending"]["topic"] == "recipient"
+    assert captured["pending"]["topic"] == "scenario"
     assert captured["pending"]["question"]
 
 
@@ -1255,7 +1269,7 @@ def test_an_interjection_turn_keeps_the_question_pending(mock_client, monkeypatc
         return AgentRunResult(output=out, seen_ids=set(), tool_calls=[], profile=TasteProfile(guided_for="self"))
 
     monkeypatch.setattr(main_mod.llm_agent, "run_agent", fake_run_agent)
-    mock_client.post("/api/chat", json={"session_id": sid, "message": "For me"})
+    _answer_for_and_skip_scenarios(mock_client, sid)
     r = mock_client.post("/api/chat", json={"session_id": sid, "message": "What is Moonlight Oud 99?"}).json()
     assert not r["picks"] and r["next_question"] is None
     # The dislike question was never answered, so this answer must still be read as a dislike.

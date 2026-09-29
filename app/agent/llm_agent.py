@@ -34,6 +34,7 @@ from app.agent.cards import price_label
 from app.agent.prompts import SYSTEM_PROMPT
 from app.agent.recommender import diversify, normalize_brand
 from app.config import settings
+from app.data import scenarios
 from app.data import taxonomy as tx
 from app.data.db import Database
 from app.schemas import TasteProfile
@@ -656,6 +657,15 @@ def instructions(ctx_wrapper: RunContextWrapper[AgentContext], agent: Agent) -> 
         f"own deterministic reading of this topic too and that reading wins on any conflict, so match it.\n"
         if ctx.pending_question else ""
     )
+    # Guided match only: in free chat the shopper never saw these titles, so the profile JSON alone carries them.
+    feel = scenarios.feel_titles(ctx.profile, ctx.language) if ctx.guided else []
+    feel_line = (
+        f"- The shopper wants to feel (moments they picked): {' | '.join(feel)}\n"
+        "  The taste profile already holds what these moments mean in notes, families and moods. Treat them as the "
+        "shopper's occasion and mood: never ask about occasion or mood again. When you recommend, tie the first "
+        "pick to the moment in plain words.\n"
+        if feel else ""
+    )
     force_line = (
         "- The shopper has answered enough questions, so this is the closing turn: do NOT ask another "
         "question. You have not searched yet this turn, so your FIRST action must be a search_perfumes call "
@@ -674,6 +684,7 @@ def instructions(ctx_wrapper: RunContextWrapper[AgentContext], agent: Agent) -> 
         f"- Wishlist consent given: {'yes' if ctx.wishlist_consent else 'no'}\n"
         f"- Perfumes shown earlier (JSON): {json.dumps(_shown_earlier(ctx), ensure_ascii=False)}\n"
         f"{anchor_line}"
+        f"{feel_line}"
         f"- Guided mode: {guided}\n"
         f"{topics_line}"
         f"{pending_line}"

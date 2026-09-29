@@ -20,6 +20,7 @@ from app.agent import images
 from app.agent.cards import card, layering_card, template_reason
 from app.agent.recommender import Catalogue, get_catalogue, normalize_brand
 from app.config import settings
+from app.data import scenarios as sc
 from app.data import taxonomy as tx
 from app.data.db import Database
 from app.schemas import AgentReply, Chip, PerfumeCard, QuizQuestion, TasteProfile
@@ -160,6 +161,15 @@ T = {
         "g_sum_like": "Like: {v}", "g_sum_occasion": "Occasion: {v}", "g_sum_strength": "Strength: {v}",
         "g_intro": "Let's find the right pick together.", "g_show_picks": "Show my picks now, please.",
         "g_finished": "Here's what I learned about you, and three picks that fit.",
+        "g_finished_feel": "Here are three picks made for \u201c{v}\u201d, shaped by everything you told me.",
+        "g_q_scenario": {"self": "Pick the moments you want this scent for",
+                         "gift_her": "Pick the moments you picture her wearing it",
+                         "gift_him": "Pick the moments you picture him wearing it",
+                         "gift_unsure": "Pick the moments you picture them wearing it"},
+        "g_scenario_hint": "Choose up to three.",
+        "g_q_moment": "Which {v} moment feels just right?",
+        "g_q_moment_multi": "Starting with the {v}, which moment feels just right?",
+        "g_sum_feel": "Feel: {v}",
     },
     "ar": {
         "greeting": "أهلاً! أنا مستشار العطور. صف لي ما تحبه بكلماتك، أو أجب عن 5 أسئلة سريعة.",
@@ -189,6 +199,15 @@ T = {
         "g_sum_like": "مثل: {v}", "g_sum_occasion": "المناسبة: {v}", "g_sum_strength": "القوة: {v}",
         "g_intro": "لنجد الاختيار المناسب معاً.", "g_show_picks": "أرني ترشيحاتي الآن من فضلك.",
         "g_finished": "إليك ما تعلمته عنك، وثلاثة اختيارات تناسبك.",
+        "g_finished_feel": "إليك ثلاثة اختيارات صُمّمت لـ«{v}»، بناءً على كل ما أخبرتني به.",
+        "g_q_scenario": {"self": "اختر اللحظات التي تريد أن يرافقك فيها هذا العطر",
+                         "gift_her": "اختر اللحظات التي تتخيلها فيها بهذا العطر",
+                         "gift_him": "اختر اللحظات التي تتخيله فيها بهذا العطر",
+                         "gift_unsure": "اختر اللحظات التي تتخيل فيها صاحب الهدية بهذا العطر"},
+        "g_scenario_hint": "اختر حتى ثلاث لحظات.",
+        "g_q_moment": "أي لحظة من {v} تبدو مثالية؟",
+        "g_q_moment_multi": "لنبدأ مع {v}: أي لحظة تبدو مثالية؟",
+        "g_sum_feel": "الأجواء: {v}",
     },
 }
 QUIZ_NOTES = ["vanilla", "oud", "rose", "musk", "jasmine", "bergamot", "sandalwood", "amber", "coffee", "berries", "sea notes", "lavender", "incense", "tobacco", "peach", "tea"]
@@ -573,10 +592,14 @@ def _mentioned_perfume_ids(text: str) -> list[set[str]]:
     return found
 
 
-def _mentions_offpick_perfume(text: str, allowed_ids: set[str]) -> bool:
+def _mentions_offpick_perfume(text: str, allowed_ids: set[str], ignore: list[str] = ()) -> bool:
     """True when `text` names a catalogue perfume that is not in `allowed_ids`: a sign the reply talks about
     a perfume the cards do not show, or, on a question turn, about a perfume that was never resolved as the
-    anchor. Very short names are skipped to avoid false positives."""
+    anchor. Very short names are skipped to avoid false positives. Phrases in `ignore` (the shopper's own
+    moment titles) are blanked out first."""
+    for phrase in ignore or ():
+        if phrase:
+            text = re.sub(re.escape(phrase), " ", text or "", flags=re.I)
     return any(not (ids & allowed_ids) for ids in _mentioned_perfume_ids(text))
 
 
@@ -584,7 +607,8 @@ _SENTENCE_SPLIT = re.compile(r"(?<=[.!?؟])\s+")
 
 
 def reconcile_reply_with_picks(reply: str, picks: list[PerfumeCard], allowed_ids: set[str],
-                               dropped_names: list[str], prof: TasteProfile, lang: str) -> str:
+                               dropped_names: list[str], prof: TasteProfile, lang: str,
+                               ignore: list[str] = ()) -> str:
     """Keeps the advisor's own words wherever they agree with the cards. Sentences that name a perfume the
     cards do not show are removed; when no remaining sentence names one of the final picks, a short
     "start with" sentence for the first pick is added. The plain template is the last resort."""
@@ -592,7 +616,7 @@ def reconcile_reply_with_picks(reply: str, picks: list[PerfumeCard], allowed_ids
         return T[lang]["no_results"]
     dropped = [n.lower() for n in dropped_names if n]
     kept = [sent for sent in _SENTENCE_SPLIT.split((reply or "").strip())
-            if sent and not _mentions_offpick_perfume(sent, allowed_ids)
+            if sent and not _mentions_offpick_perfume(sent, allowed_ids, ignore)
             and not any(n in sent.lower() for n in dropped)]
     if not kept:
         return template_reply_for_picks(picks, prof, lang)
@@ -818,7 +842,7 @@ def _asked_fallback_ids(g: dict) -> list[str]:
 
 def _record_asked_question(g: dict, q: QuizQuestion) -> None:
     g["asked"].append(q.id)
-    topic = _FALLBACK_FIELD_TO_TOPIC.get(q.id)
+    topic = _FALLBACK_FIELD_TO_TOPIC.get(q.id) or (q.topic if q.topic in SCENARIO_TOPICS else None)
     if topic and topic not in g["asked_topics"]:
         g["asked_topics"].append(topic)
 
@@ -829,6 +853,34 @@ def guided_for_question(lang: str) -> QuizQuestion:
             Chip(id="gift_him", label=t["g_gift_him"]), Chip(id="gift_unsure", label=t["g_gift_unsure"])]
     return QuizQuestion(id="guided_for", question=t["g_q_for"], multi=False, options=opts, index=1,
                         max_index=GUIDED_MAX, topic="recipient")
+
+
+SCENARIO_TOPICS = ("scenario", "scenario_moment")
+
+
+def _card_chips(options: list[dict]) -> list[Chip]:
+    return [Chip(id=o["id"], label=o["label"], caption=o["caption"], motif=o["motif"], family=o["family"])
+            for o in options]
+
+
+def guided_scenario_question(lang: str, guided_for: str | None) -> QuizQuestion:
+    """Q2, instant and rule-based: the shopper picks up to three moments they want this scent for, as cards."""
+    t = T[lang]
+    question = t["g_q_scenario"].get(guided_for or "self", t["g_q_scenario"]["self"])
+    return QuizQuestion(id="scenario", question=question, multi=True, options=_card_chips(sc.scenario_options(lang)),
+                        ask_reason=t["g_scenario_hint"], topic="scenario")
+
+
+def guided_moment_question(lang: str, scenario_ids: list[str]) -> QuizQuestion | None:
+    """Q3, instant and rule-based: the follow-up moments for the first chosen scenario (plus one from the second
+    when two or three were chosen). Single select; the widget adds its own "Something else" free-text card."""
+    options = sc.moment_options(scenario_ids, lang)
+    if not options:
+        return None
+    t = T[lang]
+    key = "g_q_moment_multi" if len(scenario_ids) > 1 else "g_q_moment"
+    return QuizQuestion(id="scenario_moment", question=t[key].format(v=sc.short(scenario_ids[0], lang)), multi=False,
+                        options=_card_chips(options), topic="scenario_moment")
 
 
 def guided_budget_question(lang: str) -> QuizQuestion:
@@ -878,6 +930,9 @@ def build_profile_summary(prof: TasteProfile, lang: str) -> list[Chip]:
     if prof.guided_for:
         label = t["g_for_label"].get(prof.guided_for, prof.guided_for)
         tags.append(Chip(id="for", label=t["g_sum_for"].format(v=label)))
+    feel = sc.feel_titles(prof, lang)
+    if feel:
+        tags.append(Chip(id="feel", label=t["g_sum_feel"].format(v=" · ".join(feel))))
     loves = [tx.note_label(n, lang) for n in prof.liked_notes] + [tx.label("families", f, lang) for f in prof.families]
     if loves:
         tags.append(Chip(id="loves", label=t["g_sum_loves"].format(v=_join_labels(loves, 4, sep))))
@@ -914,7 +969,9 @@ def guided_finish(s: dict, prof: TasteProfile, lang: str, fallback: bool = False
     the AI is unavailable or its closing turn fails the server-side consistency checks."""
     g = guided_state(s)
     g["active"], g["pending"] = False, None
-    reply = build_results(s, prof, prof.free_text or None, lang, intro=T[lang]["g_finished"], fallback=fallback)
+    feel = sc.feel_titles(prof, lang, limit=1)
+    intro = T[lang]["g_finished_feel"].format(v=feel[0]) if feel else T[lang]["g_finished"]
+    reply = build_results(s, prof, prof.free_text or None, lang, intro=intro, fallback=fallback)
     reply.guided = True
     reply.profile_summary = build_profile_summary(prof, lang)
     return reply
@@ -1010,6 +1067,21 @@ async def guided_turn(s: dict, text: str, lang: str) -> AgentReply:
     if next_index > GUIDED_MAX:
         return await guided_recommend_now(s, text, lang)
 
+    # Scenario step (instant, rule-based, no model call): after "who is this for?" the shopper picks moments they
+    # picture (Q2), then the follow-up moment for the first one (Q3). A skip, or an answer that names no
+    # scenario, falls through to the ordinary flow below; so does a direct "show me picks".
+    pending_topic = (pending or {}).get("topic")
+    if not ex.wants_recommendation(text):
+        if pending_topic == "recipient":
+            return _guided_question_reply(s, g, prof, guided_scenario_question(lang, prof.guided_for), lang,
+                                          next_index)
+        if pending_topic == "scenario" and answer.scenarios:
+            if "occasion" not in g["asked_topics"]:
+                g["asked_topics"].append("occasion")  # the moments answer the occasion/mood topic too
+            q = guided_moment_question(lang, answer.scenarios)
+            if q is not None:
+                return _guided_question_reply(s, g, prof, q, lang, next_index)
+
     # Fix (problem 4): finish as soon as enough is known instead of asking another question -- unless the
     # budget is still unknown, in which case budget is asked as the last question.
     if guided_should_recommend(prof, answered_after_q1, next_index, text):
@@ -1082,7 +1154,7 @@ async def guided_turn(s: dict, text: str, lang: str) -> AgentReply:
 
 
 def rule_based_chat(s: dict, text: str, lang: str, fallback: bool) -> AgentReply:
-    prof = taste(s).merge(ex.extract_profile(text))
+    prof = taste(s).merge(ex.extract_profile(text)).merge(sc.profile_from_text(text))
     prof, intro, not_found = resolve_anchor(prof, lang, text)
     set_taste(s, prof)
     if not_found:
@@ -1225,6 +1297,10 @@ async def llm_chat(s: dict, text: str, lang: str, guided: dict | None = None) ->
         # else: an ambiguous, unresolved anchor ("what is <general knowledge>") with no other perfume cue --
         # drop it and let the LLM agent handle the message on its own (its system prompt covers scope).
     prof = apply_hard(prof, hard_only)
+    if not guided:
+        # Free chat that sounds like a moment ("a beach holiday", "for a fancy party") reads through the same
+        # scenario library as guided match, so both paths agree on what that moment means.
+        prof = prof.merge(sc.profile_from_text(text))
     # Fix: when the profile already has a resolved anchor (this turn or an earlier one), hand the model its
     # real catalogue facts directly -- grounded, not the model's own memory of it -- so it can describe the
     # perfume correctly even for a turn where it doesn't call get_perfume/find_similar again.
@@ -1371,13 +1447,17 @@ async def llm_chat(s: dict, text: str, lang: str, guided: dict | None = None) ->
             allowed_ids.add(layering.partner.perfume_id)
         dropped_names = [(catalogue.get(pid) or {}).get("name", "") for pid in original_pick_ids if pid not in final_ids]
         survivors = sum(1 for pid in original_pick_ids if pid in final_ids)
+        # The shopper's own moment titles ("Golden hour on the sand") may echo a perfume name; they are never
+        # read as naming a perfume the cards do not show.
+        feel = sc.feel_titles(prof, lang, limit=6)
         if survivors < 2 or not final_reply.strip():
             # Most of the model's picks were replaced, so its description is about other perfumes.
             final_reply = template_reply_for_picks(picks, prof, lang)
             reply_path = "template"
-        elif dropped_names or _mentions_offpick_perfume(final_reply, allowed_ids):
+        elif dropped_names or _mentions_offpick_perfume(final_reply, allowed_ids, feel):
             before_rec = final_reply
-            final_reply = reconcile_reply_with_picks(final_reply, picks, allowed_ids, dropped_names, prof, lang)
+            final_reply = reconcile_reply_with_picks(final_reply, picks, allowed_ids, dropped_names, prof, lang,
+                                                     ignore=feel)
             reply_path = "template" if final_reply == template_reply_for_picks(picks, prof, lang) \
                 else ("reconciled" if final_reply != before_rec else "model")
     elif next_question is not None:
