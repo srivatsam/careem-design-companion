@@ -8,6 +8,7 @@ import os
 import threading
 from pathlib import Path
 
+from app.agent.cards import fragrantica_image_url
 from app.config import settings
 from app.data import taxonomy as tx
 
@@ -100,8 +101,16 @@ def _prompt(p: dict) -> str:
             "square composition, photorealistic.")
 
 
+def has_real_photo(p: dict) -> bool:
+    """True when the card already resolves to a real bottle photo (row image_url, or a derivable Fragrantica
+    photo), so generating a PNG for it would be wasted spend."""
+    return bool(p.get("image_url")) or bool(fragrantica_image_url(p.get("product_url")))
+
+
 def request_generation(p: dict) -> None:
     """Generate the PNG in a background thread once; safe to call repeatedly."""
+    if has_real_photo(p):
+        return
     if not image_deployment() or not settings.azure_openai_endpoint or not settings.azure_openai_api_key:
         return
     pid = p["perfume_id"]

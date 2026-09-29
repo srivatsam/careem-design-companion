@@ -117,6 +117,23 @@ CREATE TABLE IF NOT EXISTS event (
 CREATE INDEX IF NOT EXISTS idx_perfume_note_note ON perfume_note(note_id);
 CREATE INDEX IF NOT EXISTS idx_perfume_brand ON perfume(brand_name);
 CREATE INDEX IF NOT EXISTS idx_event_name ON event(name);
+CREATE TABLE IF NOT EXISTS chat_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id TEXT,
+  visitor_id TEXT,
+  created_at REAL NOT NULL,
+  endpoint TEXT NOT NULL,
+  lang TEXT,
+  user_text TEXT,
+  reply_text TEXT,
+  question_text TEXT,
+  intent TEXT,
+  picks TEXT,
+  fallback_used INTEGER DEFAULT 0,
+  latency_ms INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_chat_log_created ON chat_log(created_at);
+CREATE INDEX IF NOT EXISTS idx_chat_log_session ON chat_log(session_id);
 """
 
 _lock = threading.Lock()
@@ -243,6 +260,81 @@ class Database:
         with self.tx() as c:
             c.execute("INSERT INTO review_queue(kind, payload, created_at) VALUES (?,?,?)",
                       (kind, json.dumps(payload, ensure_ascii=False), time.time()))
+
+    # ---- usage tracking ---------------------------------------------------
+    def add_chat_log(self, *, session_id, visitor_id, endpoint, lang, user_text, reply_text, question_text,
+                     intent, picks, fallback_used, latency_ms) -> None:
+        with self.tx() as c:
+            c.execute(
+                "INSERT INTO chat_log(session_id, visitor_id, created_at, endpoint, lang, user_text, reply_text, "
+                "question_text, intent, picks, fallback_used, latency_ms) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                (session_id, visitor_id, time.time(), endpoint, lang, (user_text or "")[:2000],
+                 (reply_text or "")[:4000], (question_text or "")[:500], intent,
+                 json.dumps(picks or [], ensure_ascii=False), int(bool(fallback_used)), int(latency_ms or 0)))
+
+    @staticmethod
+    def _iso(ts: float) -> str:
+        return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ts))
+
+    def usage_summary(self, since_ts: float) -> dict:
+        rows = [dict(r) for r in self.conn.execute(
+            "SELECT session_id, visitor_id, created_at, endpoint, lang, user_text, intent, picks, fallback_used, "
+            "latency_ms FROM chat_log WHERE created_at >= ? ORDER BY created_at", (since_ts,))]
+        def is_message(r):  # something the shopper typed or tapped, not a system marker
+            return bool(r["user_text"]) and not r["user_text"].startswith("[guided:")
+        days: dict[str, dict] = {}
+        languages: dict[str, int] = {}
+        intents: dict[str, int] = {}
+        for r in rows:
+            d = days.setdefault(time.strftime("%Y-%m-%d", time.gmtime(r["created_at"])),
+                                {"visitors": set(), "sessions": set(), "messages": 0})
+            d["visitors"].add(r["visitor_id"]); d["sessions"].add(r["session_id"])
+            d["messages"] += 1 if is_message(r) else 0
+            languages[r["lang"] or "?"] = languages.get(r["lang"] or "?", 0) + 1
+            intents[r["intent"] or "?"] = intents.get(r["intent"] or "?", 0) + 1
+        lat = sorted(r["latency_ms"] for r in rows if r["latency_ms"])
+        return {
+            "since": self._iso(since_ts),
+            "visitors": len({r["visitor_id"] for r in rows}),
+            "sessions": len({r["session_id"] for r in rows}),
+            "messages": sum(1 for r in rows if is_message(r)),
+            "recommendations": sum(1 for r in rows if r["picks"] and r["picks"] != "[]"),
+            "guided_started": sum(1 for r in rows if r["endpoint"] == "/api/guide/start"),
+            "fallback_turns": sum(1 for r in rows if r["fallback_used"]),
+            "median_latency_ms": lat[len(lat) // 2] if lat else None,
+            "languages": languages,
+            "intents": intents,
+            "by_day": [{"date": k, "visitors": len(v["visitors"]), "sessions": len(v["sessions"]),
+                        "messages": v["messages"]} for k, v in sorted(days.items())],
+        }
+
+    def recent_conversations(self, since_ts: float, limit: int = 50) -> list[dict]:
+        sessions = [r["session_id"] for r in self.conn.execute(
+            "SELECT session_id, MAX(created_at) AS last FROM chat_log WHERE created_at >= ? "
+            "GROUP BY session_id ORDER BY last DESC LIMIT ?", (since_ts, limit))]
+        out = []
+        for sid in sessions:
+            rows = [dict(r) for r in self.conn.execute(
+                "SELECT * FROM chat_log WHERE session_id IS ? AND created_at >= ? ORDER BY created_at LIMIT 60",
+                (sid, since_ts))]
+            if not rows:
+                continue
+            turns = []
+            for r in rows:
+                try:
+                    picks = [{"name": p.get("name"), "brand": p.get("brand")} for p in json.loads(r["picks"] or "[]")]
+                except (ValueError, AttributeError):
+                    picks = []
+                turns.append({"at": self._iso(r["created_at"]), "endpoint": r["endpoint"], "user": r["user_text"],
+                              "advisor": r["reply_text"], "question": r["question_text"], "intent": r["intent"],
+                              "picks": picks, "fallback_used": bool(r["fallback_used"]),
+                              "latency_ms": r["latency_ms"]})
+            out.append({"session_id": sid, "visitor_id": rows[0]["visitor_id"],
+                        "started_at": self._iso(rows[0]["created_at"]),
+                        "last_active_at": self._iso(rows[-1]["created_at"]), "lang": rows[-1]["lang"],
+                        "message_count": sum(1 for r in rows if r["user_text"] and not r["user_text"].startswith("[guided:")),
+                        "turns": turns})
+        return out
 
     # ---- admin ------------------------------------------------------------
     def admin_summary(self) -> dict:

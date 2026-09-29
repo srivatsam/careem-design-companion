@@ -1,8 +1,37 @@
 """Turns a catalogue perfume dict into the localized PerfumeCard the widget renders."""
 from __future__ import annotations
 
+import re
+from urllib.parse import urlparse
+
 from app.data import taxonomy as tx
 from app.schemas import LayeringSuggestion, NoteGroup, PerfumeCard
+
+# Fragrantica product page: https://www.fragrantica.com/perfume/<brand>/<slug>-<id>.html
+# Fragrantica bottle photo for that id: https://fimgs.net/mdimg/perfume/375x500.<id>.jpg
+_FRAGRANTICA_ID_RE = re.compile(r"-(\d+)\.html$")
+
+
+def fragrantica_image_url(product_url: str | None) -> str | None:
+    """The real bottle photo URL for a Fragrantica product page, or None if it can't be derived."""
+    if not product_url:
+        return None
+    try:
+        host = (urlparse(product_url).netloc or "").lower()
+    except ValueError:
+        return None
+    if not (host == "fragrantica.com" or host.endswith(".fragrantica.com")):
+        return None
+    m = _FRAGRANTICA_ID_RE.search(product_url)
+    if not m:
+        return None
+    return f"https://fimgs.net/mdimg/perfume/375x500.{m.group(1)}.jpg"
+
+
+def image_url_for(p: dict) -> str:
+    """Real photo when we have one, else the generated SVG bottle at /api/image/<perfume_id>."""
+    return (p.get("image_url") or fragrantica_image_url(p.get("product_url"))
+            or f"/api/image/{p['perfume_id']}")
 
 
 def price_label(p: dict, lang: str) -> str:
@@ -48,7 +77,7 @@ def card(p: dict, lang: str, score: float | None = None, reason: str | None = No
         price_aed=p.get("price_aed"),
         price_source=p.get("price_source") or "none",
         price_label=price_label(p, lang),
-        image_url=p.get("image_url") or f"/api/image/{p['perfume_id']}",
+        image_url=image_url_for(p),
         product_url=p.get("product_url") or product_search_url(p),
         description=p["description_ar"] if lang == "ar" else p["description"],
         reason=reason,
@@ -76,8 +105,11 @@ def template_reason(p: dict, profile, lang: str) -> str:
     fam = tx.label("families", p["family"], lang).lower() if lang != "ar" else tx.label("families", p["family"], "ar")
     liked = [tx.note_label(n, lang) for n in getattr(profile, "liked_notes", []) if n in {x["note"] for x in p["notes"]}]
     strength = tx.label("strengths", p["strength"], lang).lower() if lang != "ar" else tx.label("strengths", p["strength"], "ar")
+    has_price = p.get("price_aed") is not None
     if lang == "ar":
         why = f"يحتوي على {'، '.join(liked)} التي تحبها" if liked else f"طابعه {fam} مع {'، '.join(notes)}"
-        return f"{why}، وثباته {strength}، بسعر {price_label(p, 'ar')}."
+        price_part = f" وسعره {price_label(p, 'ar')}" if has_price else ""
+        return f"{why}. ثباته {strength}{price_part}."
     why = f"has the {', '.join(liked)} you like" if liked else f"is a {fam} scent built on {', '.join(notes)}"
-    return f"{p['name']} {why}; it wears {strength} at {price_label(p, 'en')}."
+    price_part = f" and costs {price_label(p, 'en')}" if has_price else ""
+    return f"{p['name']} {why}. It wears {strength}{price_part}."

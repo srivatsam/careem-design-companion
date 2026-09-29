@@ -21,8 +21,11 @@ from agents.usage import Usage
 
 from app.agent import prompts
 from app.data import taxonomy as tx
+from app.schemas import TasteProfile
 
 UNGROUNDED_ID = "p_mock_ungrounded"
+# The distinctive phrase llm_agent.RETRY_INSTRUCTION carries; see get_response's `corrected`.
+_CORRECTION_MARK = "use_these_ids"
 
 _ARABIC = re.compile(r"[؀-ۿ]")
 _MEDICAL = re.compile(r"pregnan|allerg|breastfeed|eczema|asthma|medical|doctor|حامل|حمل|حساسية|رضاعة", re.I)
@@ -134,6 +137,128 @@ def parse_filters(text: str) -> dict:
     return args
 
 
+_GUIDED_RE = re.compile(r"Guided mode: active \(question (\d+) of up to (\d+)\)")
+_PROFILE_RE = re.compile(r"Current taste profile \(JSON\): (\{.*\})\n")
+# The server's "you have enough, recommend now" instruction (llm_agent.instructions force_line).
+_FORCE_RE = re.compile(r"Do NOT ask another question this turn")
+# The server's "this message answers THIS question" instruction (llm_agent.instructions pending_line).
+_PENDING_RE = re.compile(r"The shopper is answering: .*?\(topic: ([a-z_]+)\)")
+
+
+def _guided_state(system_instructions: str | None) -> tuple[bool, int, int]:
+    m = _GUIDED_RE.search(system_instructions or "")
+    if not m:
+        return False, 0, 0
+    return True, int(m.group(1)), int(m.group(2))
+
+
+def _profile_from_instructions(system_instructions: str | None) -> TasteProfile:
+    m = _PROFILE_RE.search(system_instructions or "")
+    if not m:
+        return TasteProfile()
+    try:
+        data = json.loads(m.group(1))
+    except json.JSONDecodeError:
+        return TasteProfile()
+    try:
+        return TasteProfile(**data)
+    except (TypeError, ValueError):
+        return TasteProfile()
+
+
+def _pending_topic(system_instructions: str | None) -> str | None:
+    m = _PENDING_RE.search(system_instructions or "")
+    return m.group(1) if m else None
+
+
+def filters_from_profile(prof: TasteProfile, text: str) -> dict:
+    """Search filters for the FINAL guided turn: everything the interview collected, not just the last message.
+
+    The real model does this by reading the taste profile in its session context; the mock has to do it
+    explicitly so the forced closing turn recommends against the whole profile (dislikes, strength, budget,
+    occasion) rather than against four words of the last answer.
+    """
+    args = parse_filters(text)
+    for key, values in (("liked_notes", prof.liked_notes), ("disliked_notes", prof.disliked_notes),
+                        ("families", prof.families), ("avoid_families", prof.avoid_families),
+                        ("moods", prof.moods)):
+        for v in values:
+            if v not in args[key]:
+                args[key].append(v)
+    args["liked_notes"] = [n for n in args["liked_notes"] if n not in args["disliked_notes"]]
+    args["families"] = [f for f in args["families"] if f not in args["avoid_families"]]
+    if prof.strength is not None:
+        args["strength"] = prof.strength
+    if prof.budget_aed is not None:
+        args["budget_aed"] = prof.budget_aed
+    if prof.gender:
+        args["gender"] = prof.gender
+    args["text"] = " ".join(filter(None, [prof.free_text, text]))[:400]
+    return args
+
+
+def _guided_signal_count(prof: TasteProfile) -> int:
+    """"At least 2 strong signals" for guided match: notes, families, moods, an anchor perfume or a budget --
+    deliberately narrower than TasteProfile.signal_count() so an incidental gender/occasion picked up from the
+    instant "who is this for?" answer doesn't finish the interview after a single turn."""
+    return sum([
+        bool(prof.liked_notes), bool(prof.disliked_notes), bool(prof.families), bool(prof.avoid_families),
+        bool(prof.moods), bool(prof.anchor_perfume), prof.budget_aed is not None,
+    ])
+
+
+# Deterministic adaptive question bank, by branch: gift (recipient) vs self, then the shared remainder.
+# Every quick_reply is worded so the extractor (app.agent.extract) reads it correctly regardless of which
+# question it answers -- e.g. dislike answers spell out the negation ("No oud") since a bare note name reads
+# as liked. Each question has a stable id: `_guided_asked_ids` matches its exact reply text back out of the
+# conversation history so a skipped question is asked once, never repeated, across the whole run.
+_GUIDED_Q_TABLE: dict[str, dict] = {
+    "style": dict(reply={"en": "What's their style?", "ar": "ما الأسلوب الذي يناسبها؟"},
+                 quick_replies={"en": ["Bold and confident", "Romantic", "Elegant", "Playful and sweet"],
+                                "ar": ["جريء وواثق", "رومانسي", "أنيق", "مرح وحلو"]},
+                 multi_select=False, applies=lambda p: not p.moods, topic="recipient"),
+    "worn": dict(reply={"en": "What scents do they usually wear?", "ar": "ما النفحات التي تحبها عادة؟"},
+                quick_replies={"en": ["Vanilla", "Oud", "Citrus", "Woody"], "ar": ["فانيليا", "عود", "حمضيات", "خشبي"]},
+                multi_select=True, applies=lambda p: not p.liked_notes, topic="liked_scents"),
+    "occasion": dict(reply={"en": "What's the occasion?", "ar": "ما المناسبة؟"},
+                     quick_replies={"en": ["Everyday", "The office", "Evening out", "A special date"],
+                                    "ar": ["يومي", "العمل", "سهرة", "موعد خاص"]},
+                     multi_select=False, applies=lambda p: not p.occasions and not p.moods, topic="occasion"),
+    "loved": dict(reply={"en": "Which scents do you love?", "ar": "ما الروائح التي تحبها؟"},
+                 quick_replies={"en": ["Vanilla", "Oud", "Rose", "Citrus"], "ar": ["فانيليا", "عود", "ورد", "حمضيات"]},
+                 multi_select=True, applies=lambda p: not p.liked_notes, topic="liked_scents"),
+    "avoid": dict(reply={"en": "Anything you'd like to avoid?", "ar": "هل هناك ما تفضّل تجنبه؟"},
+                 quick_replies={"en": ["No oud", "No musk", "Not too sweet", "Nothing to avoid"],
+                                "ar": ["بدون عود", "بدون مسك", "ليس حلواً جداً", "لا شيء"]},
+                 multi_select=True, applies=lambda p: not p.disliked_notes, topic="disliked_scents"),
+    "budget": dict(reply={"en": "What's your budget, roughly?", "ar": "ما ميزانيتك تقريباً؟"},
+                  quick_replies={"en": ["Under AED 150", "Under AED 300", "Under AED 500", "No limit"],
+                                 "ar": ["أقل من 150 درهم", "أقل من 300 درهم", "أقل من 500 درهم", "بدون حد"]},
+                  multi_select=False, applies=lambda p: p.budget_aed is None, topic="budget"),
+}
+
+
+def _guided_order(gift: bool) -> list[str]:
+    return (["style", "worn"] if gift else ["occasion", "loved"]) + ["avoid", "budget"]
+
+
+def _guided_asked_ids(items: list, arabic: bool) -> set[str]:
+    texts = {_text_of(_get(it, "content")).strip() for it in items if _get(it, "role") == "assistant"}
+    return {qid for qid, spec in _GUIDED_Q_TABLE.items() if spec["reply"]["en"] in texts or spec["reply"]["ar"] in texts}
+
+
+def _guided_question(prof: TasteProfile, arabic: bool, asked_ids: set[str]) -> dict | None:
+    gift = (prof.guided_for or "").startswith("gift")
+    lang = "ar" if arabic else "en"
+    for qid in _guided_order(gift):
+        spec = _GUIDED_Q_TABLE[qid]
+        if qid in asked_ids or not spec["applies"](prof):
+            continue
+        return {"reply": spec["reply"][lang], "quick_replies": spec["quick_replies"][lang],
+               "multi_select": spec["multi_select"], "topic": spec["topic"]}
+    return None
+
+
 def _anchor(text: str) -> str | None:
     m = _ANCHOR.search(text)
     if not m:
@@ -149,7 +274,10 @@ class MockModel(Model):
                            *, previous_response_id=None, conversation_id=None, prompt=None, **kwargs) -> ModelResponse:
         items = [{"role": "user", "content": input}] if isinstance(input, str) else list(input)
         text, calls = _current_turn(items)
+        corrected = any(_CORRECTION_MARK in _text_of(_get(it, "content")) for it in items
+                        if _get(it, "role") == "system")
         arabic = bool(_ARABIC.search(text))
+        guided_active, g_index, g_max = _guided_state(system_instructions)
 
         if _MEDICAL.search(text):
             return self._final(reply=prompts.MOCK_DOCTOR_AR if arabic else prompts.MOCK_DOCTOR_EN, intent="declined")
@@ -161,6 +289,22 @@ class MockModel(Model):
                 ids = self._shown_earlier(system_instructions)
                 return self._tool("save_wishlist", {"perfume_ids": ids[:3]})
             anchor = _anchor(text)
+            if guided_active:
+                prof = _profile_from_instructions(system_instructions)
+                forced = bool(_FORCE_RE.search(system_instructions or ""))
+                if forced:
+                    if prof.anchor_perfume_id:
+                        return self._tool("find_similar", {"perfume_id": prof.anchor_perfume_id,
+                                                           "max_price": prof.budget_aed})
+                    return self._tool("search_perfumes", filters_from_profile(prof, text))
+                if anchor and not prof.anchor_perfume_id:
+                    # "I like <perfume>": look it up so the next question can be built from its real notes.
+                    return self._tool("get_perfume", {"name_or_id": anchor})
+                q = _guided_question(prof, arabic, _guided_asked_ids(items, arabic))
+                if _guided_signal_count(prof) >= 2 or g_index > g_max or q is None:
+                    return self._tool("search_perfumes", filters_from_profile(prof, text))
+                return self._final(reply="", question=q["reply"], topic=q["topic"], intent="chat",
+                                   quick_replies=q["quick_replies"], multi_select=q["multi_select"])
             if anchor:
                 return self._tool("get_perfume", {"name_or_id": anchor})
             return self._tool("search_perfumes", parse_filters(text))
@@ -177,6 +321,14 @@ class MockModel(Model):
             if not out.get("found"):
                 return self._final(reply=prompts.MOCK_NOT_FOUND_AR if arabic else prompts.MOCK_NOT_FOUND_EN,
                                    intent="lookup")
+            if guided_active:
+                # Adaptive example from the PRD: ask what the shopper likes most about a perfume they named,
+                # with quick_replies built from that perfume's real notes (a tool result, never invented).
+                notes = ((out.get("key_notes_ar") if arabic else out.get("key_notes")) or out.get("key_notes") or [])[:4]
+                reply = (f"ما الذي يعجبك أكثر في {out.get('name')}؟" if arabic else f"What do you like most about {out.get('name')}?")
+                return self._final(reply="", question=reply, topic="anchor_feedback", intent="chat",
+                                   quick_replies=notes, multi_select=False,
+                                   profile_updates={"anchor_perfume_id": out.get("perfume_id"), "anchor_perfume": out.get("name")})
             if re.search(r"tell me about|what is|عن", text, re.I) and not re.search(r"similar|like|مثل|يشبه", text, re.I):
                 return self._final(reply=self._describe(out, arabic), intent="lookup",
                                    chips=[f"more_like:{out['perfume_id']}"],
@@ -192,9 +344,14 @@ class MockModel(Model):
                 return self._final(reply=reply, intent="chat", chips=["cheaper", "lighter"])
             top = results[:3]
             picks = [{"perfume_id": r["perfume_id"], "reason": self._reason(r, arabic)} for r in top]
-            if "MOCK_UNGROUNDED" in text and picks:
+            if "MOCK_UNGROUNDED" in text and picks and (not corrected or "MOCK_UNGROUNDED_ALWAYS" in text):
+                # `corrected` mirrors a real model taking the server's retry note ("use only ids your tools
+                # returned") and fixing itself, so the retry path can be tested offline.
                 picks[-1] = {"perfume_id": UNGROUNDED_ID, "reason": "Invented pick for testing."}
-            reply = "إليك ثلاثة خيارات تناسب ما وصفته." if arabic else "Here are three picks that match what you described."
+            first = top[0]
+            reply = (f"هذه الخيارات تناسب ما وصفته. أقترح البدء بـ {first['name']} من {first.get('brand')}."
+                     if arabic else
+                     f"These three share what you described. I would start with {first['name']} by {first.get('brand')}.")
             updates = {}
             if name == "search_perfumes":
                 updates = {k: v for k, v in args.items() if k != "text" and v not in (None, [], "")}
@@ -229,15 +386,22 @@ class MockModel(Model):
 
     @staticmethod
     def _final(reply: str, intent: str, picks: list | None = None, chips: list | None = None, layering: dict | None = None,
-               profile_updates: dict | None = None, ask_consent: bool = False) -> ModelResponse:
+               profile_updates: dict | None = None, ask_consent: bool = False, quick_replies: list | None = None,
+               multi_select: bool = False, ask_reason: str | None = None, question: str | None = None,
+               topic: str | None = None) -> ModelResponse:
         payload = {
             "reply": reply,
+            "question": question,
+            "topic": topic,
             "intent": intent,
             "picks": picks or [],
             "layering": layering,
             "chips": chips or [],
             "profile_updates": profile_updates or None,
             "ask_consent": ask_consent,
+            "quick_replies": quick_replies or [],
+            "multi_select": multi_select,
+            "ask_reason": ask_reason,
         }
         msg = ResponseOutputMessage(
             id=FAKE_RESPONSES_ID,

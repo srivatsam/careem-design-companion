@@ -1,0 +1,879 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Atelier Noor · How it works</title>
+<meta name="description" content="A short technical overview of the Atelier Noor perfume advisor: the agent loop, recommendation engine, data model, API, architecture, infrastructure and stack.">
+<meta property="og:title" content="Atelier Noor · How it works">
+<meta property="og:description" content="A short technical overview of the Atelier Noor perfume advisor: the agent loop, recommendation engine, data model, API, architecture, infrastructure and stack.">
+<meta property="og:type" content="article">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#fbfaff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0a1a" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27><defs><linearGradient id=%27g%27 x1=%270%27 y1=%270%27 x2=%271%27 y2=%271%27><stop offset=%270%27 stop-color=%27%237c3aed%27/><stop offset=%27.55%27 stop-color=%27%23e0338e%27/><stop offset=%271%27 stop-color=%27%23ff7a2f%27/></linearGradient></defs><path d=%27M50 8c13 17 25 29 25 44a25 25 0 1 1-50 0C25 37 37 25 50 8Z%27 fill=%27url(%23g)%27/></svg>">
+<style>
+  :root {
+    --bg: #fbfaff; --bg-2: #f2effa; --surface: #ffffff;
+    --ink: #171226; --ink-2: #4a4460; --ink-3: #655e7d;
+    --border: rgba(23,18,38,.10); --border-2: rgba(23,18,38,.17);
+    --brand-1: #7c3aed; --brand-2: #c4249b; --brand-3: #ff7a2f;
+    --brand-ink: #6d28d9; --brand-line: rgba(124,58,237,.30);
+    --chip-bg: rgba(124,58,237,.10); --chip-ink: #5b21b6;
+    --th-bg: rgba(124,58,237,.07);
+    --bar-bg: rgba(251,250,255,.82); --bar-solid: #fbfaff;
+    --grad: linear-gradient(118deg, var(--brand-1), var(--brand-2) 56%, var(--brand-3));
+    --btn: linear-gradient(118deg,#7c3aed,#b91d8f); --btn-ink: #ffffff;
+    --sh-1: 0 1px 2px rgba(26,14,54,.05);
+    --sh-2: 0 10px 28px rgba(26,14,54,.10), 0 2px 6px rgba(26,14,54,.06);
+    --r-1: 10px; --r-2: 14px; --r-3: 18px; --r-4: 22px;
+    --font: "SF Pro Display","Segoe UI Variable Display",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --font-word: ui-serif,"New York",Georgia,"Iowan Old Style","Times New Roman",serif;
+    --font-mono: ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    --bar: 68px;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b0a1a; --bg-2: #141130; --surface: #211d3c;
+      --ink: #f2effb; --ink-2: #c4bde0; --ink-3: #9a92bd;
+      --border: rgba(255,255,255,.11); --border-2: rgba(255,255,255,.20);
+      --brand-1: #a78bfa; --brand-2: #f472b6; --brand-3: #fdba74;
+      --brand-ink: #c4b5fd; --brand-line: rgba(167,139,250,.38);
+      --chip-bg: rgba(167,139,250,.16); --chip-ink: #dccdff;
+      --th-bg: rgba(167,139,250,.12);
+      --bar-bg: rgba(11,10,26,.80); --bar-solid: #0b0a1a;
+      --grad: linear-gradient(118deg,#a78bfa,#f472b6 56%,#fdba74);
+      --btn: linear-gradient(118deg,#a78bfa,#f472b6); --btn-ink: #180f2e;
+      --sh-1: 0 1px 2px rgba(0,0,0,.35);
+      --sh-2: 0 10px 28px rgba(0,0,0,.45), 0 2px 6px rgba(0,0,0,.30);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font);
+    line-height: 1.62; font-size: 16.5px; overflow-x: hidden; -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--brand-ink); }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; border-radius: var(--r-1); }
+
+  /* ---------------------------------------------------------------- top bar */
+  .bar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+    padding-top: env(safe-area-inset-top, 0px);
+    background: var(--bar-solid);
+    border-bottom: 1px solid var(--border);
+    box-shadow: var(--sh-1);
+  }
+  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .bar { background: var(--bar-bg); -webkit-backdrop-filter: saturate(1.7) blur(16px); backdrop-filter: saturate(1.7) blur(16px); }
+  }
+  .bar-in {
+    max-width: 1180px; margin: 0 auto; display: flex; align-items: center; gap: 14px;
+    padding: 0 max(16px, env(safe-area-inset-left, 0px)) 0 max(16px, env(safe-area-inset-right, 0px));
+    min-height: 64px;
+  }
+  .logo { display: inline-flex; align-items: center; gap: 9px; text-decoration: none; color: var(--ink); flex: none; min-height: 44px; }
+  .logo .mark { width: 24px; height: 24px; display: block; }
+  .logo .word { font-family: var(--font-word); font-size: 18px; letter-spacing: .005em; white-space: nowrap; }
+  nav.secs {
+    order: 2; flex: 1 1 auto; min-width: 0; display: flex; gap: 2px; overflow-x: auto; overflow-y: hidden;
+    scrollbar-width: none; -ms-overflow-style: none; scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+  }
+  nav.secs::-webkit-scrollbar { display: none; }
+  nav.secs a {
+    flex: none; scroll-snap-align: center; white-space: nowrap; text-decoration: none;
+    font-size: 13.5px; font-weight: 600; color: var(--ink-2);
+    padding: 0 10px; min-height: 40px; display: inline-flex; align-items: center;
+    border-radius: var(--r-1); position: relative;
+    transition: color .16s ease, background-color .16s ease;
+  }
+  @media (hover: hover) { nav.secs a:hover { color: var(--ink); background: var(--chip-bg); } }
+  nav.secs a[aria-current="true"] { color: var(--brand-ink); background: var(--chip-bg); }
+  nav.secs a[aria-current="true"]::after {
+    content: ""; position: absolute; left: 10px; right: 10px; bottom: 3px; height: 2px;
+    border-radius: 2px; background: var(--grad);
+  }
+  .cta {
+    order: 3; flex: none; text-decoration: none; font-size: 13.5px; font-weight: 650;
+    background: var(--btn); color: var(--btn-ink); min-height: 40px; padding: 0 16px;
+    border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; box-shadow: var(--sh-1);
+  }
+  .cta .short { display: none; }
+  .progress { height: 2px; background: var(--grad); width: 0%; transform-origin: 0 50%; }
+
+  @media (max-width: 860px) {
+    :root { --bar: 94px; }
+    .bar-in { flex-wrap: wrap; min-height: 0; padding-top: 2px; padding-bottom: 0; row-gap: 0; column-gap: 10px; }
+    .logo { order: 1; min-height: 42px; }
+    .cta { order: 2; margin-left: auto; min-height: 40px; padding: 0 13px; }
+    nav.secs { order: 3; }
+    .cta .full { display: none; } .cta .short { display: inline; }
+    nav.secs { order: 3; flex-basis: 100%; margin: 0 -4px; padding: 0 4px; }
+    nav.secs a { min-height: 40px; padding: 0 9px; }
+  }
+  @media (pointer: coarse) { .logo, .cta { min-height: 44px; } nav.secs a { min-height: 44px; } }
+
+  /* ---------------------------------------------------------------- layout */
+  .wrap {
+    max-width: 78ch; margin: 0 auto;
+    padding: calc(var(--bar) + env(safe-area-inset-top, 0px) + 30px) max(16px, env(safe-area-inset-left, 0px)) 72px max(16px, env(safe-area-inset-right, 0px));
+  }
+  section { scroll-margin-top: calc(var(--bar) + env(safe-area-inset-top, 0px) + 16px); margin-top: 46px; }
+  h1 {
+    font-size: clamp(30px, 6vw, 46px); line-height: 1.08; letter-spacing: -.03em; margin: 0 0 12px;
+    background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  h2 {
+    font-size: clamp(21px, 3.6vw, 27px); line-height: 1.2; letter-spacing: -.02em; margin: 0 0 12px;
+    display: flex; align-items: baseline; gap: 10px;
+  }
+  h2 .n {
+    font-size: .74em; font-weight: 750; font-variant-numeric: tabular-nums;
+    background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  h3 { font-size: 16.5px; letter-spacing: -.01em; margin: 26px 0 6px; color: var(--ink); }
+  p, li { color: var(--ink-2); }
+  p { margin: 0 0 14px; }
+  ul, ol { margin: 0 0 16px; padding-inline-start: 22px; }
+  li { margin: 0 0 7px; }
+  li::marker { color: var(--brand-ink); }
+  strong { color: var(--ink); font-weight: 650; }
+  .lede { font-size: 18.5px; color: var(--ink-2); margin-bottom: 22px; }
+  .rule { height: 1px; background: var(--border); border: 0; margin: 0; }
+
+  .c { font-family: var(--font-mono); font-size: .86em; background: var(--chip-bg); color: var(--chip-ink);
+       padding: 1.5px 6px; border-radius: 7px; white-space: nowrap; }
+
+  .ar { direction: rtl; text-align: right; font-size: 14.5px; color: var(--ink-3);
+        background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--r-2);
+        padding: 10px 14px; margin: 0 0 22px; }
+
+  /* stat tiles */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 22px 0 6px; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-3); padding: 13px 15px; box-shadow: var(--sh-1); }
+  .stat b { display: block; font-size: 21px; letter-spacing: -.02em; color: var(--ink); line-height: 1.2; }
+  .stat span { display: block; font-size: 12.5px; color: var(--ink-3); margin-top: 2px; }
+
+  /* tables */
+  .tw { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 0 18px;
+        border: 1px solid var(--border); border-radius: var(--r-3); background: var(--surface); box-shadow: var(--sh-1); }
+  table { border-collapse: collapse; width: 100%; min-width: 460px; font-size: 14.5px; }
+  th, td { text-align: left; padding: 9px 13px; border-bottom: 1px solid var(--border); vertical-align: top; color: var(--ink-2); }
+  th { background: var(--th-bg); color: var(--ink); font-weight: 650; font-size: 13px; letter-spacing: .01em; white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: 0; }
+  td .c { white-space: nowrap; }
+
+  /* diagrams */
+  .dw { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 4px 0 20px;
+        border: 1px solid var(--border); border-radius: var(--r-3); background: var(--surface); box-shadow: var(--sh-1); padding: 14px; }
+  .dw svg { display: block; }
+  .cap { font-size: 13px; color: var(--ink-3); margin: -12px 0 20px; }
+  /* On wide screens the diagrams step outside the reading column so they fit without scrolling. */
+  @media (min-width: 1040px) { .dw { margin-inline: -96px; } }
+
+  pre {
+    margin: 0 0 16px; padding: 13px 15px; overflow-x: auto; background: var(--bg-2);
+    border: 1px solid var(--border); border-radius: var(--r-2);
+    font-family: var(--font-mono); font-size: 13px; line-height: 1.55; color: var(--ink-2);
+  }
+  pre b { color: var(--ink); font-weight: 600; }
+
+  footer {
+    border-top: 1px solid var(--border); margin-top: 52px; padding: 22px 0 0;
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
+    font-size: 13.5px; color: var(--ink-3);
+  }
+  .print {
+    font: inherit; font-weight: 650; color: var(--ink); background: var(--surface);
+    border: 1px solid var(--border-2); border-radius: 999px; min-height: 44px; padding: 0 18px; cursor: pointer;
+    box-shadow: var(--sh-1);
+  }
+  @media (hover: hover) { .print:hover { border-color: var(--brand-line); color: var(--brand-ink); } }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    * { transition: none !important; animation: none !important; }
+  }
+
+  /* ---------------------------------------------------------------- print */
+  @media print {
+    :root {
+      --bg: #fff; --bg-2: #f5f3fb; --surface: #fff; --ink: #14111f; --ink-2: #33304a; --ink-3: #55516e;
+      --border: #d7d3e6; --border-2: #c3bedb; --chip-bg: #f1ebfe; --chip-ink: #4c1d95; --th-bg: #f1ebfe;
+      --brand-ink: #5b21b6; --sh-1: none; --sh-2: none;
+    }
+    .bar, .progress, footer .print, .ar { display: none !important; }
+    body { background: #fff; color: #14111f; font-size: 10.6pt; }
+    .wrap { max-width: none; padding: 0; }
+    h1 { color: #4c1d95; background: none; -webkit-text-fill-color: #4c1d95; font-size: 24pt; }
+    h2 { font-size: 14pt; margin: 0 0 6pt; break-after: avoid; page-break-after: avoid; }
+    h2 .n { color: #7c3aed; background: none; -webkit-text-fill-color: #7c3aed; }
+    h3 { break-after: avoid; page-break-after: avoid; }
+    section { margin-top: 18pt; }
+    .tw, .dw { overflow: visible; box-shadow: none; }
+    table { min-width: 0; font-size: 9pt; }
+    thead { display: table-header-group; }
+    tr { break-inside: avoid; page-break-inside: avoid; }
+    .dw svg { max-width: 100%; height: auto; }
+    pre { white-space: pre-wrap; font-size: 8.6pt; }
+    a { color: #4c1d95; text-decoration: none; }
+    @page { margin: 15mm 14mm; }
+  }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar-in">
+    <a class="logo" href="/" id="home">
+      <svg class="mark" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+        <defs><linearGradient id="bm" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#7c3aed"/><stop offset=".55" stop-color="#e0338e"/><stop offset="1" stop-color="#ff7a2f"/>
+        </linearGradient></defs>
+        <path d="M50 8c13 17 25 29 25 44a25 25 0 1 1-50 0C25 37 37 25 50 8Z" fill="url(#bm)"/>
+        <path d="M50 8c13 17 25 29 25 44a25 25 0 0 1-12 21C70 62 62 46 50 30Z" fill="#fff" opacity=".22"/>
+      </svg>
+      <span class="word">Atelier Noor</span>
+    </a>
+    <a class="cta" href="/" id="cta"><span class="full">Open the advisor</span><span class="short">Advisor</span></a>
+    <nav class="secs" id="secs" aria-label="Sections">
+      <a href="#overview">Overview</a>
+      <a href="#architecture">Under the hood</a>
+      <a href="#infra">Infra</a>
+      <a href="#stack">Stack</a>
+      <a href="#agent">Agent</a>
+      <a href="#engine">Engine</a>
+      <a href="#data">Data</a>
+      <a href="#api">API</a>
+      <a href="#embed">Embed</a>
+      <a href="#quality">Quality</a>
+    </nav>
+  </div>
+  <div class="progress" id="progress"></div>
+</header>
+
+<main class="wrap">
+
+  <h1>How Atelier Noor works</h1>
+  <p class="lede">A conversational perfume advisor that reads what a shopper says, searches a catalogue of
+    23,958 perfumes, and answers with three grounded picks and one layering idea, in English or Arabic.</p>
+  <p class="ar" id="arline" hidden>هذه الصفحة متوفرة حالياً باللغة الإنجليزية.</p>
+
+  <div class="stats">
+    <div class="stat"><b>23,958</b><span>perfumes in the catalogue</span></div>
+    <div class="stat"><b>English &amp; Arabic</b><span>including right-to-left layout</span></div>
+    <div class="stat"><b>gpt-4.1-mini</b><span>Azure OpenAI chat deployment</span></div>
+    <div class="stat"><b>UAE North</b><span>hosting and model region</span></div>
+  </div>
+
+  <!-- ============================================================ OVERVIEW -->
+  <section id="overview">
+    <h2><span class="n">01</span> Overview</h2>
+    <p>Atelier Noor is a shopping advisor for perfume. A shopper describes what they like in their own words, or
+      answers a short guided interview, and the advisor replies with three perfumes it has actually looked up in the
+      catalogue, a reason for each, and one suggestion for what to layer with the first pick. Everything runs on one
+      FastAPI service and one self-contained JavaScript file.</p>
+    <ul>
+      <li><strong>Free-text chat</strong> in English or Arabic, answering in whichever language the shopper writes.</li>
+      <li><strong>Guided match</strong>: an adaptive interview of at most five questions with tappable answers, which
+        the shopper can end early at any point.</li>
+      <li><strong>Three picks and a layering idea</strong> per recommendation, each pick a real catalogue row with its
+        notes, family, strength and price.</li>
+      <li><strong>Refine chips</strong> after every set of picks: less sweet, fresher, cheaper, stronger, lighter, or
+        more like one of the picks.</li>
+      <li><strong>Wishlist</strong> that only saves after the shopper answers yes to a direct question naming the
+        perfumes.</li>
+      <li><strong>Two ways to run</strong>: a full-page advisor, or a floating launcher embedded on any page with one
+        script tag.</li>
+    </ul>
+  </section>
+
+  <!-- ============================================================ ARCH -->
+  <section id="architecture">
+    <h2><span class="n">02</span> Under the hood</h2>
+
+    <div class="dw">
+      <svg viewBox="0 0 900 380" width="900" height="380" role="img"
+           aria-label="Component diagram: browser widget in a Shadow DOM calls the FastAPI app, whose HTTP layer, agent, recommender and importer read SQLite on Azure Files and call Azure OpenAI and the image host.">
+        <defs>
+          <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="var(--brand-1)"/>
+          </marker>
+        </defs>
+        <style>
+          .ab  { fill: var(--bg-2); stroke: var(--brand-line); stroke-width: 1.5; }
+          .ag  { fill: none; stroke: var(--brand-1); stroke-width: 2; }
+          .ax  { fill: none; stroke: var(--ink-3); stroke-width: 1.5; stroke-dasharray: 5 4; }
+          .at  { fill: var(--ink); font: 650 14px var(--font); }
+          .as  { fill: var(--ink-3); font: 500 11.5px var(--font); }
+          .al  { fill: var(--ink-3); font: 650 11.5px var(--font); letter-spacing: .06em; }
+          .aln { stroke: var(--brand-1); stroke-width: 2; fill: none; marker-end: url(#ar2); }
+        </style>
+
+        <rect class="ag" x="8" y="30" width="216" height="140" rx="16"/>
+        <text class="al" x="24" y="22">BROWSER</text>
+        <rect class="ab" x="26" y="54" width="180" height="96" rx="12"/>
+        <text class="at" x="42" y="80">Widget</text>
+        <text class="as" x="42" y="100">One JS file, Shadow DOM</text>
+        <text class="as" x="42" y="118">Chat, guided flow, cards</text>
+        <text class="as" x="42" y="136">Floating or full-page</text>
+
+        <rect class="ag" x="272" y="30" width="330" height="290" rx="16"/>
+        <text class="al" x="288" y="22">FASTAPI APP</text>
+        <rect class="ab" x="290" y="46" width="294" height="54" rx="12"/>
+        <text class="at" x="306" y="68">HTTP layer</text>
+        <text class="as" x="306" y="88">Routing, validation, rate limit, guardrails</text>
+
+        <rect class="ab" x="290" y="112" width="294" height="54" rx="12"/>
+        <text class="at" x="306" y="134">Agent</text>
+        <text class="as" x="306" y="154">Prompt, five tools, grounding guardrail</text>
+
+        <rect class="ab" x="290" y="178" width="294" height="54" rx="12"/>
+        <text class="at" x="306" y="200">Recommender</text>
+        <text class="as" x="306" y="220">In-memory index, scoring, filters, variety</text>
+
+        <rect class="ab" x="290" y="244" width="294" height="54" rx="12"/>
+        <text class="at" x="306" y="266">Importer</text>
+        <text class="as" x="306" y="286">CSV ingestion, normalisation, review queue</text>
+
+        <rect class="ab" x="656" y="46" width="236" height="60" rx="12"/>
+        <text class="at" x="672" y="70">SQLite on Azure Files</text>
+        <text class="as" x="672" y="90">Catalogue and session tables</text>
+
+        <rect class="ab" x="656" y="140" width="236" height="60" rx="12"/>
+        <text class="at" x="672" y="164">Azure OpenAI</text>
+        <text class="as" x="672" y="184">Chat deployment, UAE North</text>
+
+        <rect class="ab" x="656" y="234" width="236" height="60" rx="12"/>
+        <text class="at" x="672" y="258">Image host</text>
+        <text class="as" x="672" y="278">Product photos, SVG fallback</text>
+
+        <path class="aln" d="M224 100 H266"/>
+        <path class="aln" d="M602 76 H650"/>
+        <path class="aln" d="M602 139 H626 V170 H650"/>
+        <path class="aln" d="M602 205 H620 V76 H650"/>
+        <path class="aln" d="M602 271 H626 V76 H650" stroke-dasharray="0"/>
+        <path class="ax" d="M116 170 V336 H772 V294"/>
+        <text class="as" x="140" y="354">The widget loads product photos directly from the image host</text>
+      </svg>
+    </div>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>Component</th><th>Responsibility</th></tr></thead>
+        <tbody>
+          <tr><td>Widget</td><td>Renders chat and guided UI inside a Shadow DOM, calls the JSON API, keeps language and session id in the browser, posts analytics events. All server text is inserted as text, never markup.</td></tr>
+          <tr><td>HTTP layer</td><td>Routing, Pydantic validation, rate limiting, the deterministic safety gates, session load and save, and assembly of the localised reply.</td></tr>
+          <tr><td>Agent layer</td><td>Builds the agent and its five tools, runs one turn with a timeout, applies the grounding guardrail, merges profile updates, sanitises questions and quick replies.</td></tr>
+          <tr><td>Recommender</td><td>Loads the catalogue into an in-memory index at start-up; scoring, hard filters, variety rules, similarity and layering. Runs with no model.</td></tr>
+          <tr><td>Rule-based extractor</td><td>Reads notes, families, mood, strength, budget and an anchor perfume out of English or Arabic free text; powers the fallback path and constraint enforcement.</td></tr>
+          <tr><td>Cards and images</td><td>Turns a catalogue row into a localised card with price labelling, and resolves a product photo or a generated SVG bottle.</td></tr>
+          <tr><td>Data layer</td><td>SQLite schema and access for catalogue and session tables, with the journal mode chosen for the network file share.</td></tr>
+          <tr><td>Importer</td><td>CSV ingestion with note normalisation, family, strength, season, occasion and mood inference, price estimation, and a review queue for unknown notes and zero-result queries.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============================================================ INFRA -->
+  <section id="infra">
+    <h2><span class="n">03</span> Infrastructure and deployment</h2>
+    <p>The live site runs on Azure App Service as a Linux container, one always-on instance in UAE North. The container
+      image is built in an Azure Container Registry, so no local Docker is needed. The SQLite file lives on an Azure
+      Files share mounted at <span class="c">/data</span>, which survives restarts and redeployments. Application output
+      goes to App Service container logs. The Bicep templates under <span class="c">infra/</span> describe an
+      alternative deployment on Azure Container Apps that shares the same image and the same file-share approach.</p>
+
+    <p><strong>A release</strong> is a container build in the registry under a fresh image tag, then repointing the app
+      at that tag, which restarts it. The previous tag stays pullable, so rolling back means redeploying the earlier
+      tag. Data written since is not rolled back with it.</p>
+
+    <p><strong>Start-up.</strong> The entrypoint counts the perfumes already in the database. On an empty database it
+      imports the bundled seed catalogue and any CSV baked into the image, builds that on container-local disk and moves
+      the finished file into place in one step, so a restart mid-import simply re-runs the import next boot. When rows
+      already exist, the import is skipped and the server starts straight away. <span class="c">GET /api/health</span>
+      reports the perfume count, model and embedding status and any brand filter, and backs the container health check.</p>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>Variable</th><th>Purpose</th><th>Default</th></tr></thead>
+        <tbody>
+          <tr><td><span class="c">LLM_PROVIDER</span></td><td>Agent backend: azure, mock, or none for rules only.</td><td><span class="c">azure</span></td></tr>
+          <tr><td><span class="c">AZURE_OPENAI_ENDPOINT</span></td><td>Azure OpenAI resource endpoint.</td><td>empty</td></tr>
+          <tr><td><span class="c">AZURE_OPENAI_API_KEY</span></td><td>Azure OpenAI key. Never logged or displayed.</td><td>empty</td></tr>
+          <tr><td><span class="c">AZURE_OPENAI_API_VERSION</span></td><td>REST API version.</td><td><span class="c">2024-10-21</span></td></tr>
+          <tr><td><span class="c">AZURE_OPENAI_CHAT_DEPLOYMENT</span></td><td>Chat deployment name.</td><td><span class="c">gpt-4o-mini</span></td></tr>
+          <tr><td><span class="c">AZURE_OPENAI_EMBED_DEPLOYMENT</span></td><td>Embedding deployment; blank disables semantic scoring.</td><td>empty</td></tr>
+          <tr><td><span class="c">DATABASE_PATH</span></td><td>SQLite file path.</td><td><span class="c">/data/app.db</span> in the image</td></tr>
+          <tr><td><span class="c">BRAND_FILTER</span></td><td>Restrict the catalogue to one brand.</td><td>empty</td></tr>
+          <tr><td><span class="c">DEFAULT_LANG</span></td><td>Language when none is given.</td><td><span class="c">en</span></td></tr>
+          <tr><td><span class="c">ADMIN_TOKEN</span></td><td>Bearer token for the admin endpoints.</td><td>must be set</td></tr>
+          <tr><td><span class="c">RATE_LIMIT_PER_MINUTE</span></td><td>Requests per IP per minute.</td><td><span class="c">30</span></td></tr>
+          <tr><td><span class="c">PORT</span></td><td>Port uvicorn binds to.</td><td><span class="c">8000</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============================================================ STACK -->
+  <section id="stack">
+    <h2><span class="n">04</span> Tech stack</h2>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Technology</th><th>Version</th><th>Used for</th></tr></thead>
+        <tbody>
+          <tr><td>Python base image</td><td><span class="c">python:3.11-slim</span></td><td>Runtime, running as a non-root user.</td></tr>
+          <tr><td>FastAPI</td><td>0.141.1</td><td>HTTP routing, OpenAPI schema, the interactive reference.</td></tr>
+          <tr><td>Uvicorn</td><td>0.54.0</td><td>ASGI server, behind the platform proxy.</td></tr>
+          <tr><td>Pydantic</td><td>2.13.5</td><td>Request validation and the shared reply models.</td></tr>
+          <tr><td>OpenAI Agents SDK</td><td>0.22.3</td><td>Agent loop, tool calling, output guardrail.</td></tr>
+          <tr><td>OpenAI SDK</td><td>3.20.0</td><td>Azure OpenAI chat and embedding calls.</td></tr>
+          <tr><td>NumPy</td><td>2.4.6</td><td>The in-memory scoring index.</td></tr>
+          <tr><td>httpx</td><td>0.28.1</td><td>Outbound HTTP.</td></tr>
+          <tr><td>SQLite</td><td>Python standard library</td><td>Catalogue and session storage in one file.</td></tr>
+          <tr><td>pytest</td><td>9.1.1</td><td>Unit and API tests.</td></tr>
+          <tr><td>Front end</td><td>Vanilla JavaScript</td><td>One file, no build step, no framework, rendered inside a Shadow DOM so host page styles cannot reach it.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============================================================ AGENT -->
+  <section id="agent">
+    <h2><span class="n">05</span> How the agent works</h2>
+
+    <div class="dw">
+      <svg viewBox="0 0 900 400" width="900" height="400" role="img"
+           aria-label="Flow of one chat turn: message, safety and scope checks, taste profile, agent with tools, grounding check, server post-processing, response.">
+        <defs>
+          <linearGradient id="gq" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#7c3aed"/><stop offset=".56" stop-color="#c4249b"/><stop offset="1" stop-color="#ff7a2f"/>
+          </linearGradient>
+          <marker id="ar1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="var(--brand-1)"/>
+          </marker>
+        </defs>
+        <style>
+          .bx  { fill: var(--bg-2); stroke: var(--brand-line); stroke-width: 1.5; }
+          .bxa { fill: var(--chip-bg); stroke: var(--brand-1); stroke-width: 2; }
+          .bxe { fill: none; stroke: var(--ink-3); stroke-width: 1.5; stroke-dasharray: 5 4; }
+          .t   { fill: var(--ink); font: 650 14px var(--font); }
+          .ts  { fill: var(--ink-3); font: 500 11.5px var(--font); }
+          .tm  { fill: var(--chip-ink); font: 600 11.5px var(--font-mono); }
+          .ln  { stroke: var(--brand-1); stroke-width: 2; fill: none; marker-end: url(#ar1); }
+          .st  { fill: var(--brand-2); font: 750 12px var(--font); }
+        </style>
+
+        <!-- row 1 -->
+        <rect class="bx" x="8"   y="40" width="150" height="62" rx="14"/>
+        <text class="st" x="20" y="60">1</text><text class="t" x="36" y="61">Message</text>
+        <text class="ts" x="20" y="82">Shopper text + session id</text>
+
+        <rect class="bx" x="188" y="40" width="170" height="62" rx="14"/>
+        <text class="st" x="200" y="60">2</text><text class="t" x="216" y="61">Safety &amp; scope</text>
+        <text class="ts" x="200" y="82">Deterministic, before the model</text>
+
+        <rect class="bx" x="388" y="40" width="160" height="62" rx="14"/>
+        <text class="st" x="400" y="60">3</text><text class="t" x="416" y="61">Taste profile</text>
+        <text class="ts" x="400" y="82">Loaded and merged</text>
+
+        <rect class="bxa" x="578" y="24" width="312" height="140" rx="16"/>
+        <text class="st" x="594" y="46">4</text><text class="t" x="610" y="47">Agent turn</text>
+        <text class="ts" x="594" y="67">Azure OpenAI gpt-4.1-mini, five tools</text>
+        <text class="tm" x="594" y="90">search_perfumes</text>
+        <text class="tm" x="594" y="108">get_perfume</text>
+        <text class="tm" x="594" y="126">find_similar</text>
+        <text class="tm" x="742" y="90">suggest_layering</text>
+        <text class="tm" x="742" y="108">save_wishlist</text>
+        <text class="ts" x="594" y="150">Catalogue rows come back as tool results</text>
+
+        <path class="ln" d="M158 71 H182"/>
+        <path class="ln" d="M358 71 H382"/>
+        <path class="ln" d="M548 71 H572"/>
+        <path class="ln" d="M734 164 V206"/>
+
+        <!-- row 2 -->
+        <rect class="bx" x="608" y="212" width="252" height="62" rx="14"/>
+        <text class="st" x="622" y="232">5</text><text class="t" x="638" y="233">Grounding check</text>
+        <text class="ts" x="622" y="254">Only ids a tool returned this turn survive</text>
+
+        <rect class="bx" x="248" y="212" width="300" height="62" rx="14"/>
+        <text class="st" x="262" y="232">6</text><text class="t" x="278" y="233">Server post-processing</text>
+        <text class="ts" x="262" y="254">Constraints, variety, reply/card consistency</text>
+
+        <rect class="bx" x="8" y="212" width="160" height="62" rx="14"/>
+        <text class="st" x="22" y="232">7</text><text class="t" x="38" y="233">Response</text>
+        <text class="ts" x="22" y="254">Reply, 3 cards, chips</text>
+
+        <path class="ln" d="M608 243 H552"/>
+        <path class="ln" d="M248 243 H172"/>
+
+        <!-- fallback -->
+        <rect class="bxe" x="248" y="312" width="300" height="56" rx="14"/>
+        <text class="t" x="264" y="336">Rule-based fallback</text>
+        <text class="ts" x="264" y="356">Used when the model errors, times out or is switched off</text>
+        <path class="ln" d="M398 274 V308" stroke-dasharray="5 4"/>
+      </svg>
+    </div>
+
+    <ol>
+      <li><strong>Message.</strong> The page posts the shopper's text and session id to <span class="c">/api/chat</span>.</li>
+      <li><strong>Safety and scope checks.</strong> Regex gates for prompt injection, medical or allergy questions,
+        an active brand filter, and off-topic requests run first. Any match returns a declined reply with no model
+        call. A pending wishlist consent question is answered here too.</li>
+      <li><strong>Taste profile.</strong> The session row is read from SQLite and the stored taste profile is merged
+        with anything the message itself reveals, so every later step works from one picture of the shopper.</li>
+      <li><strong>Agent with tools.</strong> The agent runs one turn against Azure OpenAI with five tools:
+        <span class="c">search_perfumes</span>, <span class="c">get_perfume</span>, <span class="c">find_similar</span>,
+        <span class="c">suggest_layering</span> and <span class="c">save_wishlist</span>. The prompt forbids naming any
+        perfume a tool has not returned in this turn.</li>
+      <li><strong>Grounding check.</strong> An output guardrail compares every recommended and layered perfume id
+        against the ids tools actually returned. Anything else is dropped.</li>
+      <li><strong>Server post-processing.</strong> Hard constraints are re-applied over the model's picks, brand and
+        line duplicates are swapped out, and the written reply is reconciled with the cards so it never names a
+        perfume that is not shown.</li>
+      <li><strong>Response.</strong> One JSON object carries the reply text, up to three perfume cards, a layering
+        suggestion, refine chips, the next question, and the updated profile.</li>
+    </ol>
+
+    <h3>Guided match</h3>
+    <p>The first question, “who is this for?”, is served instantly with no model call. After that the model writes each
+      question itself, with two to six tappable answers, and each answer is read against the question that was asked.
+      The server tracks which topics have been covered so a question is never repeated, and holds recommendations back
+      until the shopper has answered at least two questions beyond the first and given at least two real taste signals.
+      Recipient or gender alone never counts. Five questions is the cap, and the shopper can ask for picks at any point
+      through <span class="c">/api/guide/finish</span>.</p>
+
+    <h3>Grounding and safety</h3>
+    <p>Only perfumes returned by a tool in the current turn can be recommended; the guardrail drops the rest, and a
+      total grounding failure falls back to the deterministic recommender rather than an empty answer. The wishlist tool
+      checks a server-side consent flag instead of trusting the model, so a save happens only after an explicit yes.
+      Medical, allergy and off-topic requests are declined with a short explanation, prompt-injection attempts are
+      refused, and all user text and tool output is treated as data. Requests are limited to 30 per minute per IP
+      address. When the model errors or times out, the rule-based extractor and recommender answer instead.</p>
+  </section>
+
+  <!-- ============================================================ ENGINE -->
+  <section id="engine">
+    <h2><span class="n">06</span> Recommendation engine</h2>
+    <p>The catalogue is loaded into an in-memory index at start-up and scored deterministically. The engine works on
+      its own, with no model in the loop, which is what the fallback path uses.</p>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>Signal</th><th>Weight</th><th>What it measures</th></tr></thead>
+        <tbody>
+          <tr><td>Note and accord match</td><td>0.50</td><td>Cosine similarity between a profile vector (liked notes ×2, requested families ×2, mood hints ×0.5, anchor perfume ×3, avoided families −1.5) and each perfume's note/accord vector.</td></tr>
+          <tr><td>Semantic match</td><td>0.30</td><td>Embedding similarity when an embedding deployment is configured; otherwise an IDF-weighted keyword overlap expanded through the note and family taxonomy.</td></tr>
+          <tr><td>Quality signal</td><td>0.20</td><td>Shrunk rating blended with popularity, clamped to 0–1.</td></tr>
+          <tr><td>Strength and season fit</td><td>×0.7 + 0.3 × fit</td><td>Multiplier applied to the weighted total, from how close the strength is and whether seasons and occasions overlap.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Hard filters</h3>
+    <p>A perfume is discarded outright, before scoring matters, when it is marked not recommendable, is the anchor
+      perfume or a flanker of the same line, falls outside an active brand filter, is priced above the stated budget,
+      carries a disliked note, sits in an avoided family, is more than two steps from the requested strength, or does
+      not match a stated gender.</p>
+
+    <h3>Variety rules</h3>
+    <ul>
+      <li>At most one perfume per brand among the three picks.</li>
+      <li>Near-duplicate line extensions sharing a leading name are skipped.</li>
+      <li>The three picks never all share one family, unless the shopper asked for exactly one family and named no notes.</li>
+      <li>The anchor perfume and its flankers are excluded on every path, so “something like X” never returns X.</li>
+      <li>When too few candidates remain to fill three picks, brand and line variety is relaxed and the next best
+        matches fill the gap.</li>
+    </ul>
+
+    <h3>Semantic matching</h3>
+    <p>Embedding-based scoring is implemented and switched off in the live deployment: no embedding deployment is
+      configured, so the semantic term falls back to the keyword and IDF path.</p>
+  </section>
+
+  <!-- ============================================================ DATA -->
+  <section id="data">
+    <h2><span class="n">07</span> Data model</h2>
+    <p>One SQLite file holds both halves of the system: catalogue tables written by the importer, and session tables
+      written as shoppers use the advisor.</p>
+
+    <div class="dw">
+      <svg viewBox="0 0 900 400" width="900" height="400" role="img"
+           aria-label="Entity diagram of the SQLite tables: brand, perfume, note, perfume_note, perfume_accord, perfume_embedding, layering_pair, session, wishlist, feedback, event and review_queue.">
+        <style>
+          .eb  { fill: var(--bg-2); stroke: var(--brand-line); stroke-width: 1.5; }
+          .eb2 { fill: var(--chip-bg); stroke: var(--brand-1); stroke-width: 2; }
+          .et  { fill: var(--chip-ink); font: 700 12.5px var(--font-mono); }
+          .ef  { fill: var(--ink-3); font: 500 11px var(--font); }
+          .eg  { fill: var(--ink-3); font: 650 11.5px var(--font); letter-spacing: .06em; }
+          .el  { stroke: var(--ink-3); stroke-width: 1.4; fill: none; }
+        </style>
+
+        <text class="eg" x="10" y="16">CATALOGUE</text>
+        <rect class="eb" x="10" y="26" width="168" height="54" rx="12"/>
+        <text class="et" x="24" y="46">brand</text><text class="ef" x="24" y="65">brand_id · name · country</text>
+
+        <rect class="eb2" x="10" y="106" width="250" height="118" rx="14"/>
+        <text class="et" x="24" y="128">perfume</text>
+        <text class="ef" x="24" y="147">perfume_id · name · brand_id</text>
+        <text class="ef" x="24" y="164">family · strength · gender</text>
+        <text class="ef" x="24" y="181">seasons · occasions · moods</text>
+        <text class="ef" x="24" y="198">price_aed · price_source · rating</text>
+        <text class="ef" x="24" y="215">image_url · product_url · licence</text>
+
+        <rect class="eb" x="300" y="26" width="200" height="54" rx="12"/>
+        <text class="et" x="314" y="46">note</text><text class="ef" x="314" y="65">note_id · family · synonyms</text>
+
+        <rect class="eb" x="300" y="100" width="200" height="50" rx="12"/>
+        <text class="et" x="314" y="120">perfume_note</text><text class="ef" x="314" y="138">layer: top · heart · base</text>
+
+        <rect class="eb" x="300" y="166" width="200" height="50" rx="12"/>
+        <text class="et" x="314" y="186">perfume_accord</text><text class="ef" x="314" y="204">accord · strength 0–100</text>
+
+        <rect class="eb" x="300" y="232" width="200" height="50" rx="12"/>
+        <text class="et" x="314" y="252">perfume_embedding</text><text class="ef" x="314" y="270">model · vector</text>
+
+        <rect class="eb" x="300" y="298" width="200" height="50" rx="12"/>
+        <text class="et" x="314" y="318">layering_pair</text><text class="ef" x="314" y="336">a · b · reason · source</text>
+
+        <path class="el" d="M94 80 V106"/>
+        <path class="el" d="M260 125 H300"/>
+        <path class="el" d="M260 165 H280 V191 H300"/>
+        <path class="el" d="M260 175 H272 V257 H300"/>
+        <path class="el" d="M260 205 H264 V323 H300"/>
+        <path class="el" d="M400 80 V100"/>
+
+        <text class="eg" x="560" y="16">SESSION</text>
+        <rect class="eb2" x="560" y="26" width="330" height="118" rx="14"/>
+        <text class="et" x="574" y="48">session</text>
+        <text class="ef" x="574" y="67">session_id · language</text>
+        <text class="ef" x="574" y="84">profile (taste profile + guided state, JSON)</text>
+        <text class="ef" x="574" y="101">history (last 30 turns, JSON)</text>
+        <text class="ef" x="574" y="118">consent_wishlist · last_results</text>
+        <text class="ef" x="574" y="135">created_at · updated_at</text>
+
+        <rect class="eb" x="560" y="176" width="330" height="46" rx="12"/>
+        <text class="et" x="574" y="195">wishlist</text><text class="ef" x="574" y="213">session_id + perfume_id</text>
+
+        <rect class="eb" x="560" y="238" width="330" height="46" rx="12"/>
+        <text class="et" x="574" y="257">feedback</text><text class="ef" x="574" y="275">perfume_id · thumbs · clicked · saved</text>
+
+        <rect class="eb" x="560" y="300" width="160" height="46" rx="12"/>
+        <text class="et" x="574" y="319">event</text><text class="ef" x="574" y="337">name · props</text>
+
+        <rect class="eb" x="732" y="300" width="158" height="46" rx="12"/>
+        <text class="et" x="746" y="319">review_queue</text><text class="ef" x="746" y="337">kind · payload</text>
+
+        <path class="el" d="M600 144 V176"/>
+        <path class="el" d="M600 222 V238"/>
+        <path class="el" d="M600 284 V300"/>
+        <path class="el" d="M500 191 H540 V199 H560" stroke-dasharray="4 4"/>
+      </svg>
+    </div>
+    <p class="cap">Solid lines are foreign keys; the dashed line marks the perfume ids a wishlist or feedback row
+      refers to.</p>
+
+    <p><strong>What a session stores.</strong> Sessions are anonymous: a random id, no account, no sign-in, no
+      cross-session identity. Each row holds the language, the taste profile and guided state as JSON, the perfume ids
+      last shown, a wishlist consent flag, and the conversation history capped at the last 30 turns. The agent is given
+      the last 12 turns of that history on any one call.</p>
+
+    <p><strong>Taste profile fields.</strong> <span class="c">liked_notes</span>, <span class="c">disliked_notes</span>,
+      <span class="c">families</span>, <span class="c">avoid_families</span>, <span class="c">moods</span>,
+      <span class="c">occasions</span>, <span class="c">seasons</span>, <span class="c">strength</span> (1–5),
+      <span class="c">budget_aed</span>, <span class="c">anchor_perfume</span>, <span class="c">anchor_perfume_id</span>,
+      <span class="c">anchor_cheaper</span>, <span class="c">brand</span>, <span class="c">gender</span>,
+      <span class="c">guided_for</span> and <span class="c">free_text</span>. Every field is optional, and two profiles
+      merge by union for lists and last-value-wins for scalars.</p>
+  </section>
+
+  <!-- ============================================================ API -->
+  <section id="api">
+    <h2><span class="n">08</span> API</h2>
+    <p>All request bodies are JSON and validated by Pydantic. The full interactive reference, with request and response
+      schemas, is at <a href="/api/docs">/api/docs</a>, and the machine-readable schema at
+      <a href="/api/openapi.json">/api/openapi.json</a>.</p>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>Method</th><th>Path</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td>GET</td><td><span class="c">/api/health</span></td><td>Perfume count, model and embedding status, brand filter.</td></tr>
+          <tr><td>POST</td><td><span class="c">/api/session</span></td><td>Start or resume a session; returns a greeting and the fixed quiz.</td></tr>
+          <tr><td>POST</td><td><span class="c">/api/session/reset</span></td><td>Clear taste, history and guided progress; keep the wishlist.</td></tr>
+          <tr><td>POST</td><td><span class="c">/api/chat</span></td><td>One free-text turn, and the carrier for guided answers.</td></tr>
+          <tr><td>POST</td><td><span class="c">/api/guide/start</span></td><td>Begin guided match; returns question one instantly.</td></tr>
+          <tr><td>POST</td><td><span class="c">/api/guide/finish</span></td><td>Show picks now, from whatever the interview has learned.</td></tr>
+          <tr><td>POST</td><td><span class="c">/api/quiz</span></td><td>Submit the fixed five-question quiz in one call.</td></tr>
+          <tr><td>POST</td><td><span class="c">/api/refine</span></td><td>Apply a refine chip to the last results.</td></tr>
+          <tr><td>POST</td><td><span class="c">/api/wishlist</span></td><td>Save perfumes to the session wishlist, with consent.</td></tr>
+          <tr><td>GET</td><td><span class="c">/api/wishlist</span></td><td>Read the session's wishlist.</td></tr>
+          <tr><td>POST</td><td><span class="c">/api/feedback</span></td><td>Thumbs or click on a shown pick.</td></tr>
+          <tr><td>POST</td><td><span class="c">/api/events</span></td><td>Analytics event from the page.</td></tr>
+          <tr><td>GET</td><td><span class="c">/api/perfume/{id}</span></td><td>One perfume as a localised card.</td></tr>
+          <tr><td>GET</td><td><span class="c">/api/image/{id}</span></td><td>Bottle art: cached image if present, otherwise a generated SVG.</td></tr>
+          <tr><td>GET</td><td><span class="c">/api/admin/summary</span></td><td>Events, feedback and review queue. Bearer token.</td></tr>
+          <tr><td>POST</td><td><span class="c">/api/admin/reload</span></td><td>Rebuild the in-memory catalogue. Bearer token.</td></tr>
+          <tr><td>GET</td><td><span class="c">/widget.js</span></td><td>The embeddable widget script.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>A <span class="c">/api/chat</span> response, trimmed to the fields that matter:</p>
+<pre>{
+  <b>"session_id"</b>: "s_…",
+  <b>"language"</b>: "en",
+  <b>"reply"</b>: "All three lean warm and woody. I'd start with …",
+  <b>"intent"</b>: "recommend",
+  <b>"picks"</b>: [
+    {
+      "perfume_id": "p_…", "name": "…", "brand": "…",
+      "family": "woody", "strength": 4,
+      "key_notes": ["oud", "rose", "amber"],
+      "price_label": "~AED 350 (est.)",
+      "reason": "Warm oud over rose, close to what you described.",
+      "match_score": 88
+    }
+  ],
+  <b>"layering"</b>: { "base_perfume_id": "p_…", "partner": { … }, "reason": "…" },
+  <b>"chips"</b>: [ { "id": "less_sweet", "label": "Less sweet" } ],
+  <b>"next_question"</b>: null,
+  <b>"profile"</b>: { "liked_notes": ["oud"], "budget_aed": 400 },
+  <b>"fallback_used"</b>: false
+}</pre>
+  </section>
+
+  <!-- ============================================================ EMBED -->
+  <section id="embed">
+    <h2><span class="n">09</span> Embedding the widget</h2>
+    <p>Floating launcher, the default, on any page:</p>
+<pre>&lt;script src="https://&lt;host&gt;/widget.js" data-lang="en" data-brand=""&gt;&lt;/script&gt;</pre>
+    <p>Full-page mode, mounted into an element, which is how the advisor homepage uses it:</p>
+<pre>&lt;main id="agent"&gt;&lt;/main&gt;
+&lt;script&gt;
+  var s = document.createElement('script');
+  s.src = '/widget.js';
+  s.setAttribute('data-lang', 'en');
+  s.setAttribute('data-mode', 'page');
+  s.setAttribute('data-mount', '#agent');
+  document.body.appendChild(s);
+&lt;/script&gt;</pre>
+    <p><span class="c">data-lang</span> sets the starting language, <span class="c">en</span> or <span class="c">ar</span>.
+      <span class="c">data-brand</span> is sent when the session starts. <span class="c">data-api</span> points at a
+      different API origin, defaulting to the origin that served the script.
+      <span class="c">data-mode="page"</span> switches from the floating launcher to inline full-page mode, and
+      <span class="c">data-mount</span> is the CSS selector of the element it mounts inside.</p>
+  </section>
+
+  <!-- ============================================================ QUALITY -->
+  <section id="quality">
+    <h2><span class="n">10</span> Quality and performance</h2>
+    <p>170 unit and API test functions cover the recommendation engine, the guided flow end to end, the agent tools and
+      grounding guardrail, rule-based extraction in both languages, card and price localisation, image generation, and
+      the HTTP surface including the safety gates. A Playwright end-to-end suite drives a real browser across the
+      floating widget, the full-page advisor and the guided flow.</p>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Measure</th><th>Result on the live site</th></tr></thead>
+        <tbody>
+          <tr><td>Ordinary chat reply</td><td>about 6 to 12 seconds</td></tr>
+          <tr><td>Guided question, English</td><td>about 2.5 to 4.5 seconds</td></tr>
+          <tr><td>Guided question, Arabic</td><td>about 9 to 11 seconds</td></tr>
+          <tr><td>First guided question</td><td>about 0.3 seconds, no model call</td></tr>
+          <tr><td>Budget, disliked-note and avoided-family constraints respected</td><td>26 of 26 measured recommendation turns</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <span>Last updated 29 September 2026</span>
+    <button class="print" id="printbtn" type="button">Print / Save as PDF</button>
+  </footer>
+</main>
+
+<script>
+(function () {
+  var params = new URLSearchParams(location.search);
+  if (params.get('lang') === 'ar') {
+    var line = document.getElementById('arline');
+    if (line) line.hidden = false;
+    ['home', 'cta'].forEach(function (id) {
+      var a = document.getElementById(id);
+      if (a) a.setAttribute('href', '/?lang=ar');
+    });
+  }
+
+  var btn = document.getElementById('printbtn');
+  if (btn) btn.addEventListener('click', function () { window.print(); });
+
+  var nav = document.getElementById('secs');
+  var links = Array.prototype.slice.call(nav.querySelectorAll('a'));
+  var byId = {};
+  links.forEach(function (a) { byId[a.getAttribute('href').slice(1)] = a; });
+  var sections = links.map(function (a) { return document.getElementById(a.getAttribute('href').slice(1)); })
+                      .filter(Boolean);
+
+  var current = null;
+  function setActive(id) {
+    if (id === current) return;
+    current = id;
+    links.forEach(function (a) {
+      var on = a.getAttribute('href') === '#' + id;
+      if (on) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current');
+    });
+    var a = byId[id];
+    if (a && nav.scrollWidth > nav.clientWidth) {
+      var l = a.offsetLeft, r = l + a.offsetWidth;
+      if (l < nav.scrollLeft + 12 || r > nav.scrollLeft + nav.clientWidth - 12) {
+        nav.scrollTo({ left: Math.max(0, l - (nav.clientWidth - a.offsetWidth) / 2),
+                       behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+      }
+    }
+  }
+
+  var visible = {};
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) visible[e.target.id] = e.intersectionRatio;
+        else delete visible[e.target.id];
+      });
+      var best = null;
+      sections.forEach(function (s) { if (visible[s.id] != null && best === null) best = s.id; });
+      if (best === null) {
+        // Nothing in the observed band: fall back to the last section above the bar.
+        var top = document.documentElement.scrollTop || document.body.scrollTop;
+        sections.forEach(function (s) { if (s.offsetTop - 140 <= top) best = s.id; });
+      }
+      if (best) setActive(best);
+    }, { rootMargin: '-25% 0px -55% 0px', threshold: [0, 0.01, 0.5] });
+    sections.forEach(function (s) { io.observe(s); });
+  }
+
+  var bar = document.getElementById('progress');
+  var ticking = false;
+  function onScroll() {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(function () {
+      var h = document.documentElement.scrollHeight - window.innerHeight;
+      var p = h > 0 ? Math.min(1, Math.max(0, window.scrollY / h)) : 0;
+      bar.style.width = (p * 100).toFixed(2) + '%';
+      if (window.scrollY < 40) setActive('overview');
+      else if (h - window.scrollY < 4 && sections.length) setActive(sections[sections.length - 1].id);
+      ticking = false;
+    });
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  window.addEventListener('resize', onScroll);
+  onScroll();
+  setActive('overview');
+})();
+</script>
+</body>
+</html>

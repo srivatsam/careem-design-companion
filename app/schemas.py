@@ -24,6 +24,7 @@ class TasteProfile(BaseModel):
     anchor_cheaper: bool = False                              # "like X but cheaper"
     brand: Optional[str] = None
     gender: Optional[str] = None                              # women | men | unisex
+    guided_for: Optional[str] = None                          # self | gift_her | gift_him | gift_unsure (guided match)
     free_text: str = ""                                       # accumulated user wording, for semantic matching
 
     def merge(self, other: "TasteProfile") -> "TasteProfile":
@@ -42,6 +43,17 @@ class TasteProfile(BaseModel):
             bool(self.liked_notes), bool(self.disliked_notes), bool(self.families), bool(self.avoid_families),
             bool(self.moods), bool(self.occasions), bool(self.seasons), self.strength is not None,
             self.budget_aed is not None, bool(self.anchor_perfume), bool(self.gender),
+        ])
+
+    def guided_signal_count(self) -> int:
+        """"Strong" taste signals for Guided match's early-recommend rule: deliberately narrower than
+        signal_count() -- gender/recipient (picked up from the instant "who is this for?" answer) must never
+        count on its own, and an anchor only counts once it actually resolves in the catalogue (anchor_perfume_id),
+        not just from a name the shopper typed."""
+        return sum([
+            bool(self.liked_notes), bool(self.disliked_notes), bool(self.families), bool(self.avoid_families),
+            bool(self.moods), bool(self.occasions), self.strength is not None, self.budget_aed is not None,
+            bool(self.anchor_perfume_id),
         ])
 
 
@@ -86,10 +98,16 @@ class Chip(BaseModel):
 
 
 class QuizQuestion(BaseModel):
-    id: str      # liked_notes | disliked_notes | mood | strength | budget
+    id: str      # liked_notes | disliked_notes | mood | strength | budget | guided_for | ...
     question: str
     multi: bool
     options: list[Chip]
+    ask_reason: Optional[str] = None   # short "why I'm asking" hint (guided match)
+    index: Optional[int] = None        # 1-based question number, guided match only
+    max_index: Optional[int] = None    # max questions in this guided run (5)
+    topic: Optional[str] = None        # recipient | occasion | liked_scents | disliked_scents | strength |
+                                        # budget | anchor_feedback | other -- lets guided match track which
+                                        # topics were already asked so a model-authored question never repeats one
 
 
 class AgentReply(BaseModel):
@@ -103,3 +121,5 @@ class AgentReply(BaseModel):
     fallback_used: bool = False
     intent: str = "chat"              # chat | recommend | lookup | wishlist | declined | fallback
     profile: TasteProfile = Field(default_factory=TasteProfile)
+    guided: bool = False               # this turn is part of "Guided match"
+    profile_summary: list[Chip] = Field(default_factory=list)  # "what I learned" tags shown above the picks

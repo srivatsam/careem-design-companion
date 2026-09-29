@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<title>Widget embed test harness</title>
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex">
+<style>
+  /* Mirrors the product page's backdrop so the floating panel is reviewed against a realistic host site. */
+  :root { --bg: #fbfaff; --ink: #171226; --ink-2: #4a4460; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0b0a1a; --ink: #f2effb; --ink-2: #c4bde0; } }
+  * { box-sizing: border-box; }
+  html { overscroll-behavior: none; }
+  body {
+    margin: 0; min-height: 100vh; min-height: 100dvh; overflow-x: hidden; overscroll-behavior-y: none; background: var(--bg); color: var(--ink); line-height: 1.55;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased;
+  }
+  body::before {
+    content: ""; position: fixed; inset: -25%; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(34% 32% at 14% 14%, rgba(124,58,237,.26), transparent 64%),
+      radial-gradient(30% 30% at 86% 8%, rgba(224,51,142,.22), transparent 66%),
+      radial-gradient(40% 38% at 82% 86%, rgba(255,138,61,.18), transparent 66%),
+      radial-gradient(36% 34% at 10% 90%, rgba(34,178,232,.18), transparent 66%);
+  }
+  @media (prefers-color-scheme: dark) {
+    body::before {
+      background:
+        radial-gradient(34% 32% at 14% 14%, rgba(139,92,246,.40), transparent 64%),
+        radial-gradient(30% 30% at 86% 8%, rgba(236,72,153,.30), transparent 66%),
+        radial-gradient(40% 38% at 82% 86%, rgba(251,146,60,.22), transparent 66%),
+        radial-gradient(36% 34% at 10% 90%, rgba(56,189,248,.24), transparent 66%);
+    }
+  }
+  .note { position: relative; z-index: 1; max-width: 640px; margin: 0 auto;
+    padding: 48px max(16px, env(safe-area-inset-right, 0px)) 120px max(16px, env(safe-area-inset-left, 0px)); }
+  .note h1 { font-size: clamp(28px, 5vw, 40px); letter-spacing: -.03em; line-height: 1.1; margin: 0 0 14px; }
+  .note p { color: var(--ink-2); }
+  .note code { font-size: .92em; padding: 1px 6px; border-radius: 6px; background: rgba(124,58,237,.10); }
+</style>
+</head>
+<body>
+  <div class="note">
+    <h1>Widget embed test harness</h1>
+    <p>This page exists only to exercise <code>/widget.js</code> in its default floating (embeddable) mode
+      for automated testing (see <code>tests/e2e_widget.spec.mjs</code>). It is not part of the product
+      homepage &mdash; that's <code>/</code>, which mounts the widget in full-page mode instead.</p>
+  </div>
+<script>
+  (function () {
+    var params = new URLSearchParams(location.search);
+    var lang = params.get('lang') === 'ar' ? 'ar' : 'en';
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+
+    var s = document.createElement('script');
+    s.src = '/widget.js';
+    s.setAttribute('data-lang', lang);
+    s.setAttribute('data-brand', params.get('brand') || '');
+    document.body.appendChild(s);
+  })();
+</script>
+</body>
+</html>

@@ -1,64 +1,196 @@
 <!doctype html>
 <html lang="en" dir="ltr">
 <head>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27><rect x=%2730%27 y=%2735%27 width=%2740%27 height=%2755%27 rx=%278%27 fill=%27%238a5a2b%27/><rect x=%2742%27 y=%2712%27 width=%2716%27 height=%2726%27 rx=%273%27 fill=%27%233f2c1c%27/></svg>">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27><defs><linearGradient id=%27g%27 x1=%270%27 y1=%270%27 x2=%271%27 y2=%271%27><stop offset=%270%27 stop-color=%27%237c3aed%27/><stop offset=%27.55%27 stop-color=%27%23e0338e%27/><stop offset=%271%27 stop-color=%27%23ff7a2f%27/></linearGradient></defs><path d=%27M50 8c13 17 25 29 25 44a25 25 0 1 1-50 0C25 37 37 25 50 8Z%27 fill=%27url(%23g)%27/></svg>">
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Atelier Noor · Perfume finder demo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<title data-t="pagetitle">Atelier Noor · Your perfume guide</title>
+<meta name="description" content="Describe a mood, an occasion, or a perfume you love, and get three tailored picks with a layering idea in under a minute.">
+<meta property="og:title" content="Atelier Noor · Your perfume guide">
+<meta property="og:description" content="Describe a mood, an occasion, or a perfume you love, and get three tailored picks with a layering idea in under a minute.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Atelier Noor">
+<meta name="twitter:card" content="summary">
 <meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#fbfaff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0a1a" media="(prefers-color-scheme: dark)">
 <style>
+  /* The scent spectrum: a near-white page lit by soft colour fields, glass chrome, a gradient brand mark. */
   :root {
-    --bg: #faf7f2; --surface: #ffffff; --ink: #1f1a15; --ink-2: #5c5349; --border: #e8e1d6; --accent: #8a5a2b;
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+    --bg: #fbfaff; --surface: rgba(255,255,255,.72); --surface-solid: #ffffff;
+    --ink: #171226; --ink-2: #4a4460; --ink-3: #655e7d;
+    --border: rgba(23,18,38,.10); --border-2: rgba(23,18,38,.17);
+    --brand-1: #7c3aed; --brand-2: #c4249b; --brand-3: #ff7a2f;
+    --brand-line: rgba(124,58,237,.30); --ring: rgba(124,58,237,.45);
+    --grad: linear-gradient(118deg, var(--brand-1), var(--brand-2) 56%, var(--brand-3));
+    --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+    --font-word: ui-serif, "New York", Georgia, "Iowan Old Style", "Times New Roman", serif;
+    color-scheme: light dark;
+    font-family: var(--font);
   }
   :root[lang="ar"] { font-family: "SF Arabic", "Geeza Pro", "Noto Sans Arabic", "Segoe UI", Tahoma, system-ui, sans-serif; }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #171411; --surface: #211d19; --ink: #f3ede5; --ink-2: #c6bbae; --border: #362f28; --accent: #d49a5c; }
+    :root {
+      --bg: #0b0a1a; --surface: rgba(46,40,86,.55); --surface-solid: #211d3c;
+      --ink: #f2effb; --ink-2: #c4bde0; --ink-3: #9a92bd;
+      --border: rgba(255,255,255,.11); --border-2: rgba(255,255,255,.20);
+      --brand-1: #a78bfa; --brand-2: #f472b6; --brand-3: #fdba74;
+      --brand-line: rgba(167,139,250,.38); --ring: rgba(167,139,250,.55);
+    }
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink); line-height: 1.5; }
-  a { color: var(--accent); }
-  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
-  header.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 0; }
-  .logo { font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: 15px; }
-  :root[lang="ar"] .logo { letter-spacing: 0; }
-  .lang { font-size: 14px; font-weight: 600; text-decoration: none; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; }
-  .hero { padding: 40px 0 28px; }
-  .hero h1 { font-size: clamp(30px, 6vw, 48px); line-height: 1.1; margin: 0 0 12px; font-weight: 700; max-width: 16ch; }
-  .hero p { margin: 0; max-width: 52ch; color: var(--ink-2); font-size: 17px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; padding: 12px 0 28px; }
-  .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
-  .swatch { aspect-ratio: 4 / 3; display: grid; place-items: center; font-size: 28px; font-weight: 700; color: rgba(31,26,21,.55); }
-  .tile .meta { padding: 12px 14px 14px; }
-  .tile h3 { margin: 0; font-size: 16px; }
-  .tile p { margin: 2px 0 0; color: var(--ink-2); font-size: 14px; }
-  .note { border-top: 1px solid var(--border); padding: 20px 0 120px; color: var(--ink-2); font-size: 14px; max-width: 70ch; }
-  code { font-size: 12.5px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; direction: ltr; unicode-bidi: embed; display: inline-block; max-width: 100%; overflow-x: auto; white-space: nowrap; }
+  /* Phone browsers change the goalposts: toolbars slide away and the keyboard covers the bottom. 100dvh
+     tracks the visible area (100% stays as the fallback), --psa-kb is the keyboard height the widget
+     measures from visualViewport, and overscroll-behavior stops the whole page rubber-banding. */
+  html, body { height: 100%; margin: 0; }
+  html { overflow: hidden; overscroll-behavior: none; }
+  body {
+    height: 100dvh;
+    background: var(--bg); color: var(--ink); line-height: 1.5;
+    display: flex; flex-direction: column; overflow: hidden; overflow-x: hidden;
+    overscroll-behavior: none;
+    -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+  }
+  /* Large, slowly drifting colour fields. Calm enough that every surface above still reads at AA. */
+  body::before {
+    content: ""; position: fixed; inset: -25%; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(34% 32% at 14% 14%, rgba(124,58,237,.30), transparent 64%),
+      radial-gradient(30% 30% at 86% 8%, rgba(224,51,142,.26), transparent 66%),
+      radial-gradient(40% 38% at 82% 86%, rgba(255,138,61,.22), transparent 66%),
+      radial-gradient(36% 34% at 10% 90%, rgba(34,178,232,.22), transparent 66%);
+    animation: drift 52s cubic-bezier(.2,.9,.3,1) infinite alternate;
+  }
+  @media (prefers-color-scheme: dark) {
+    body::before {
+      background:
+        radial-gradient(40% 38% at 16% 10%, rgba(139,92,246,.58), transparent 66%),
+        radial-gradient(34% 32% at 84% 6%, rgba(236,72,153,.42), transparent 66%),
+        radial-gradient(44% 42% at 82% 88%, rgba(251,146,60,.30), transparent 66%),
+        radial-gradient(38% 36% at 8% 92%, rgba(56,189,248,.34), transparent 66%);
+    }
+  }
+  @keyframes drift { from { transform: translate3d(0,0,0) scale(1); } to { transform: translate3d(2%,-2.5%,0) scale(1.1); } }
+  main#agent, noscript { position: relative; z-index: 1; }
+  /* above #agent, so the overflow menu's popover is not trapped under the widget */
+  header.top { position: relative; z-index: 20; }
+  header.top {
+    flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding-block: 12px; border-block-end: 1px solid var(--border);
+    padding-left: max(20px, env(safe-area-inset-left, 0px));
+    padding-right: max(20px, env(safe-area-inset-right, 0px));
+    padding-top: calc(12px + env(safe-area-inset-top, 0px));
+    background: var(--surface); -webkit-backdrop-filter: saturate(1.7) blur(18px); backdrop-filter: saturate(1.7) blur(18px);
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    header.top { background: var(--surface-solid); }
+  }
+  .logo { display: inline-flex; align-items: center; gap: 10px; }
+  .logo .mark { width: 26px; height: 26px; flex: none; filter: drop-shadow(0 2px 6px rgba(124,58,237,.35)); }
+  .logo .word {
+    font-family: var(--font-word); font-weight: 600; font-size: 20px; letter-spacing: .03em;
+    line-height: 1.1; font-feature-settings: "liga" 1;
+  }
+  :root[lang="ar"] .logo .word { font-family: inherit; letter-spacing: 0; font-size: 19px; font-weight: 700; }
+  .top-actions { display: flex; align-items: center; gap: 6px; }
+  .lang {
+    font-size: 13px; font-weight: 650; text-decoration: none; color: var(--ink);
+    padding: 0 16px; min-height: 38px; display: inline-flex; align-items: center;
+    border: 1px solid var(--border-2); border-radius: 999px; background: var(--surface-solid);
+    box-shadow: 0 1px 2px rgba(26,14,54,.05);
+    transition: border-color .18s ease, color .18s ease, transform .18s ease;
+  }
+  @media (hover: hover) { .lang:hover { border-color: var(--brand-line); color: var(--brand-2); transform: translateY(-1px); } }
+  .guide {
+    font-size: 13px; font-weight: 650; text-decoration: none; color: var(--ink-2);
+    padding: 0 12px; min-height: 44px; display: inline-flex; align-items: center;
+    border-radius: 10px; transition: color .18s ease;
+  }
+  @media (hover: hover) { .guide:hover { color: var(--brand-2); } }
+  :focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; border-radius: 10px; }
+  ::selection { background: rgba(124,58,237,.18); color: var(--ink); }
+  main#agent { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  noscript { display: block; padding: 24px 20px; max-width: 60ch; color: var(--ink-2); }
+  a, button, summary { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  /* every top-bar control clears 44px on a touch screen, at any width */
+  @media (pointer: coarse) { .lang, .guide { min-height: 44px; } }
+
+  /* Phones: the guide moves into a 44px overflow menu so the wordmark and the language switch
+     still breathe at 360px, and stays one tap away for the whole session. */
+  .menu { display: none; position: relative; }
+  .menu-btn {
+    list-style: none; width: 44px; height: 44px; display: grid; place-items: center; cursor: pointer;
+    border: 1px solid var(--border-2); border-radius: 12px; background: var(--surface-solid); color: var(--ink-2);
+    box-shadow: 0 1px 2px rgba(26,14,54,.05);
+  }
+  .menu-btn::-webkit-details-marker { display: none; }
+  .menu-btn svg { width: 20px; height: 20px; display: block; }
+  .menu[open] .menu-btn { border-color: var(--brand-line); color: var(--brand-2); }
+  .menu-pop {
+    position: absolute; top: calc(100% + 8px); inset-inline-end: 0; min-width: 200px; padding: 6px; z-index: 40;
+    border: 1px solid var(--border-2); border-radius: 14px; background: var(--surface-solid);
+    box-shadow: 0 10px 28px rgba(26,14,54,.16), 0 2px 6px rgba(26,14,54,.08);
+  }
+  .menu-item {
+    display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 10px;
+    text-decoration: none; color: var(--ink); font-size: 14px; font-weight: 650;
+  }
+  @media (hover: hover) { .menu-item:hover { background: rgba(124,58,237,.09); color: var(--brand-2); } }
+
+  @media (max-width: 600px) {
+    header.top { padding-block: 7px; padding-top: calc(7px + env(safe-area-inset-top, 0px)); gap: 8px; }
+    header.top { padding-left: max(14px, env(safe-area-inset-left, 0px)); padding-right: max(14px, env(safe-area-inset-right, 0px)); }
+    .logo { gap: 8px; }
+    .logo .mark { width: 22px; height: 22px; }
+    .logo .word { font-size: 17px; }
+    :root[lang="ar"] .logo .word { font-size: 16px; }
+    .guide { display: none; }
+    .menu { display: block; }
+    .lang { min-height: 44px; padding: 0 14px; font-size: 13px; }
+    .top-actions { gap: 8px; }
+  }
+  /* Landscape phones: every pixel of height counts, so the bar goes as thin as 44px controls allow. */
+  @media (max-height: 500px) and (orientation: landscape) {
+    header.top { padding-block: 4px; padding-top: calc(4px + env(safe-area-inset-top, 0px)); }
+    .logo .word { font-size: 16px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    body::before { animation: none; }
+    * { transition-duration: 1ms !important; }
+  }
 </style>
 </head>
 <body>
-  <div class="wrap">
-    <header class="top">
-      <span class="logo" data-t="logo">Atelier Noor</span>
+  <header class="top">
+    <span class="logo">
+      <svg class="mark" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+        <defs><linearGradient id="brandmark" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#7c3aed"/><stop offset=".55" stop-color="#e0338e"/><stop offset="1" stop-color="#ff7a2f"/>
+        </linearGradient></defs>
+        <path d="M50 8c13 17 25 29 25 44a25 25 0 1 1-50 0C25 37 37 25 50 8Z" fill="url(#brandmark)"/>
+        <path d="M50 8c13 17 25 29 25 44a25 25 0 0 1-12 21C70 62 62 46 50 30Z" fill="#fff" opacity=".22"/>
+      </svg>
+      <span class="word" data-t="logo">Atelier Noor</span>
+    </span>
+    <div class="top-actions">
+      <a class="guide" id="guide-link" href="/docs/" data-t="guide">Project guide</a>
+      <details class="menu" id="top-menu">
+        <summary class="menu-btn" id="menu-btn" role="button" aria-label="More">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <circle cx="5" cy="12" r="1.9" fill="currentColor"/><circle cx="12" cy="12" r="1.9" fill="currentColor"/><circle cx="19" cy="12" r="1.9" fill="currentColor"/>
+          </svg>
+        </summary>
+        <div class="menu-pop">
+          <a class="menu-item" id="guide-link-menu" href="/docs/" data-t="guide">Project guide</a>
+        </div>
+      </details>
       <a class="lang" id="lang-switch" href="?lang=ar">العربية</a>
-    </header>
+    </div>
+  </header>
 
-    <section class="hero">
-      <h1 data-t="h1">Scents for every mood and moment</h1>
-      <p data-t="lead">Not sure where to start? Tap “Find your scent” and our assistant will suggest three perfumes and a layering idea in under a minute.</p>
-    </section>
+  <main id="agent" aria-label="Perfume finder"></main>
 
-    <section class="grid" aria-label="Featured">
-      <article class="tile"><div class="swatch" style="background:#e2b4bf">RN</div><div class="meta"><h3 data-t="p1">Rose Nocturne</h3><p data-t="p1s">Floral · AED 420</p></div></article>
-      <article class="tile"><div class="swatch" style="background:#e6d584">CS</div><div class="meta"><h3 data-t="p2">Citrus Shore</h3><p data-t="p2s">Fresh · AED 290</p></div></article>
-      <article class="tile"><div class="swatch" style="background:#b39a82">OA</div><div class="meta"><h3 data-t="p3">Oud Amberwood</h3><p data-t="p3s">Woody · AED 560</p></div></article>
-    </section>
-
-    <section class="note">
-      <p data-t="proto">This page is a prototype store. The perfumes, prices and images come from a small seed catalogue, and some prices are estimates. The assistant is embedded with one script tag:</p>
-      <p><code>&lt;script src="/widget.js" data-lang="en" data-brand=""&gt;&lt;/script&gt;</code></p>
-    </section>
-  </div>
+  <noscript data-t="noscript">Please enable JavaScript to use the perfume finder.</noscript>
 
 <script>
   (function () {
@@ -66,12 +198,10 @@
     var lang = params.get('lang') === 'ar' ? 'ar' : 'en';
     var AR = {
       logo: 'أتيليه نور',
-      h1: 'عطور لكل مزاج ولكل لحظة',
-      lead: 'لست متأكداً من أين تبدأ؟ اضغط على «اعثر على عطرك» وسيقترح عليك المساعد ثلاثة عطور وفكرة للمزج في أقل من دقيقة.',
-      p1: 'وردة الليل', p1s: 'زهري · 420 درهم',
-      p2: 'شاطئ الحمضيات', p2s: 'منعش · 290 درهم',
-      p3: 'عود وعنبر', p3s: 'خشبي · 560 درهم',
-      proto: 'هذه الصفحة متجر تجريبي. العطور والأسعار والصور مأخوذة من كتالوج أولي صغير، وبعض الأسعار تقديرية. يُضمَّن المساعد بسطر برمجي واحد:'
+      pagetitle: 'أتيليه نور · دليلك إلى العطور',
+      noscript: 'يرجى تفعيل جافاسكربت لاستخدام مكتشف العطور.',
+      guide: 'دليل المشروع',
+      more: 'المزيد'
     };
     document.documentElement.lang = lang;
     document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
@@ -88,10 +218,27 @@
     sw.textContent = other === 'ar' ? 'العربية' : 'English';
     sw.lang = other;
 
+    var docsHref = '/docs/?lang=' + lang;
+    document.getElementById('guide-link').href = docsHref;
+    document.getElementById('guide-link-menu').href = docsHref;
+
+    // Overflow menu: <details> gives the disclosure for free; these two listeners give it the
+    // dismiss behaviour people expect from a menu.
+    var menu = document.getElementById('top-menu');
+    document.getElementById('menu-btn').setAttribute('aria-label', lang === 'ar' ? AR.more : 'More');
+    document.addEventListener('click', function (ev) {
+      if (menu.open && !menu.contains(ev.target)) menu.open = false;
+    });
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape' && menu.open) { menu.open = false; document.getElementById('menu-btn').focus(); }
+    });
+
     var s = document.createElement('script');
-    s.src = '/widget.js';
+    s.src = '/widget.js?v=db473d1efb';  // version = content hash; update on every release so browsers fetch the new file
     s.setAttribute('data-lang', lang);
     s.setAttribute('data-brand', params.get('brand') || '');
+    s.setAttribute('data-mode', 'page');
+    s.setAttribute('data-mount', '#agent');
     document.body.appendChild(s);
   })();
 </script>

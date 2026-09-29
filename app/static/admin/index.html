@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Atelier Noor · Usage</title>
+<style>
+  :root { --bg:#fbfaff; --surface:#fff; --ink:#171226; --ink2:#4a4460; --border:rgba(23,18,38,.10); --accent:#7c3aed; --soft:rgba(124,58,237,.09);
+    font-family: system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0b0a1a; --surface:#211d3c; --ink:#f2effb; --ink2:#c4bde0; --border:rgba(255,255,255,.11); --accent:#a78bfa; --soft:rgba(167,139,250,.14); } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); line-height:1.5; }
+  main { max-width: 1000px; margin: 0 auto; padding: 20px 16px 60px; }
+  h1 { font-size: 24px; margin: 8px 0 4px; } h2 { font-size: 16px; margin: 28px 0 10px; }
+  p.sub { margin:0 0 16px; color:var(--ink2); font-size:14px; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  input, select, button { font: inherit; min-height:44px; border-radius:12px; border:1px solid var(--border); background:var(--surface); color:var(--ink); padding:0 14px; }
+  input { flex:1 1 220px; min-width:0; }
+  button { cursor:pointer; font-weight:600; }
+  button.primary { background:var(--accent); border-color:transparent; color:#fff; }
+  @media (prefers-color-scheme: dark) { button.primary { color:#180f2e; } }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-top:16px; }
+  .tile { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:12px 14px; }
+  .tile b { display:block; font-size:26px; font-variant-numeric:tabular-nums; } .tile span { color:var(--ink2); font-size:13px; }
+  .scroll { overflow-x:auto; border:1px solid var(--border); border-radius:14px; background:var(--surface); }
+  table { border-collapse:collapse; width:100%; font-size:14px; } th,td { text-align:start; padding:8px 12px; border-bottom:1px solid var(--border); white-space:nowrap; }
+  th { color:var(--ink2); font-weight:600; background:var(--soft); }
+  .lists { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; }
+  ul.kv { list-style:none; margin:0; padding:12px 14px; background:var(--surface); border:1px solid var(--border); border-radius:14px; font-size:14px; }
+  ul.kv li { display:flex; justify-content:space-between; gap:12px; padding:2px 0; }
+  details { background:var(--surface); border:1px solid var(--border); border-radius:14px; margin:8px 0; }
+  summary { cursor:pointer; padding:12px 14px; font-size:14px; display:flex; flex-wrap:wrap; gap:6px 14px; align-items:center; }
+  summary b { font-weight:600; } summary .meta { color:var(--ink2); }
+  .turns { padding:0 14px 14px; font-size:14px; }
+  .turn { padding:8px 0; border-top:1px solid var(--border); overflow-wrap:anywhere; }
+  .who { font-weight:600; } .shopper .who { color:var(--accent); } .small { color:var(--ink2); font-size:12.5px; }
+  .msg { color:var(--ink2); font-size:14px; margin:10px 0; min-height:20px; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Usage</h1>
+  <p class="sub">Who used the advisor and what they asked. People are counted by an anonymous browser id.</p>
+  <form class="row" id="auth" autocomplete="off">
+    <input type="password" id="token" placeholder="Admin token" aria-label="Admin token" autocomplete="off">
+    <select id="days" aria-label="Period"><option value="1">Today (24 h)</option><option value="7" selected>7 days</option><option value="30">30 days</option></select>
+    <button class="primary" type="submit">View usage</button>
+  </form>
+  <div class="msg" id="msg" role="status"></div>
+  <section id="report" hidden>
+    <div class="tiles" id="tiles"></div>
+    <h2>By day (UTC)</h2>
+    <div class="scroll"><table><thead><tr><th>Date</th><th>People</th><th>Sessions</th><th>Messages</th></tr></thead><tbody id="days-body"></tbody></table></div>
+    <h2>Breakdown</h2>
+    <div class="lists"><ul class="kv" id="langs"></ul><ul class="kv" id="intents"></ul></div>
+    <h2>Conversations</h2>
+    <div class="row">
+      <input type="search" id="filter" placeholder="Filter by text" aria-label="Filter conversations">
+      <button type="button" id="showall">Show all</button>
+      <button type="button" id="csv">Download CSV</button>
+    </div>
+    <div id="convs"></div>
+  </section>
+</main>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var hidden = {}, convs = [];
+  function el(tag, cls, text) { var n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = String(text); return n; }
+  function local(iso) { try { return new Date(iso).toLocaleString(); } catch (e) { return iso; } }
+  function api(path, token) {
+    return fetch(path, { headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' }, cache: 'no-store' })
+      .then(function (r) { if (r.status === 401) throw new Error('401'); if (!r.ok) throw new Error('http'); return r.json(); });
+  }
+  function tile(label, value) { var t = el('div', 'tile'); t.appendChild(el('b', null, value)); t.appendChild(el('span', null, label)); return t; }
+  function kv(target, title, obj) {
+    target.textContent = ''; target.appendChild(el('li', 'small', title));
+    Object.keys(obj || {}).sort(function (a, b) { return obj[b] - obj[a]; }).forEach(function (k) {
+      var li = el('li'); li.appendChild(el('span', null, k)); li.appendChild(el('b', null, obj[k])); target.appendChild(li);
+    });
+  }
+  function renderConvs() {
+    var q = $('filter').value.trim().toLowerCase(), box = $('convs'); box.textContent = '';
+    visible().forEach(function (c) {
+      var d = el('details'), s = el('summary');
+      s.appendChild(el('b', null, local(c.started_at)));
+      s.appendChild(el('span', 'meta', 'visitor ' + c.visitor_id));
+      s.appendChild(el('span', 'meta', (c.lang || '?') + ' · ' + c.message_count + ' messages'));
+      var hide = el('button', null, 'Hide visitor'); hide.type = 'button';
+      hide.addEventListener('click', function (ev) { ev.preventDefault(); hidden[c.visitor_id] = true; renderConvs(); });
+      s.appendChild(hide); d.appendChild(s);
+      var turns = el('div', 'turns');
+      c.turns.forEach(function (t) {
+        var a = el('div', 'turn shopper'); a.appendChild(el('span', 'who', 'Shopper: ')); a.appendChild(document.createTextNode(t.user || ''));
+        a.appendChild(el('div', 'small', local(t.at) + ' · ' + (t.intent || '') + ' · ' + ((t.latency_ms || 0) / 1000).toFixed(1) + ' s'));
+        turns.appendChild(a);
+        var b = el('div', 'turn'); b.appendChild(el('span', 'who', 'Advisor: ')); b.appendChild(document.createTextNode(t.advisor || ''));
+        if (t.question) b.appendChild(el('div', null, 'Question: ' + t.question));
+        if (t.picks && t.picks.length) b.appendChild(el('div', 'small', 'Picks: ' + t.picks.map(function (p) { return p.brand + ', ' + p.name; }).join(' · ')));
+        turns.appendChild(b);
+      });
+      d.appendChild(turns); box.appendChild(d);
+    });
+    if (!box.firstChild) box.appendChild(el('p', 'msg', 'No conversations in this period.'));
+    function visible() {
+      return convs.filter(function (c) {
+        if (hidden[c.visitor_id]) return false;
+        return !q || JSON.stringify(c).toLowerCase().indexOf(q) >= 0;
+      });
+    }
+    renderConvs.visible = visible;
+  }
+  function cell(v) {
+    v = v == null ? '' : String(v).replace(/\r?\n/g, ' ');
+    if (/^[=+\-@]/.test(v)) v = "'" + v;
+    return '"' + v.replace(/"/g, '""') + '"';
+  }
+  function downloadCsv() {
+    var lines = [['time_utc', 'visitor_id', 'session_id', 'language', 'endpoint', 'intent', 'shopper_text', 'advisor_reply', 'picks'].map(cell).join(',')];
+    renderConvs.visible().forEach(function (c) {
+      c.turns.forEach(function (t) {
+        lines.push([t.at, c.visitor_id, c.session_id, c.lang, t.endpoint, t.intent, t.user, t.advisor,
+          (t.picks || []).map(function (p) { return p.brand + ' ' + p.name; }).join('; ')].map(cell).join(','));
+      });
+    });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+    a.download = 'atelier-noor-usage.csv'; document.body.appendChild(a); a.click(); a.remove();
+  }
+  function load() {
+    var token = $('token').value.trim() || sessionStorage.getItem('psa_admin') || '';
+    if (!token) { $('msg').textContent = 'Enter the admin token.'; return; }
+    var days = $('days').value; $('msg').textContent = 'Loading…';
+    Promise.all([api('/api/admin/usage?days=' + days, token), api('/api/admin/conversations?limit=200&days=' + days, token)]).then(function (r) {
+      sessionStorage.setItem('psa_admin', token); $('token').value = '';
+      var u = r[0]; convs = r[1].conversations || [];
+      var tiles = $('tiles'); tiles.textContent = '';
+      tiles.appendChild(tile('People', u.visitors)); tiles.appendChild(tile('Sessions', u.sessions));
+      tiles.appendChild(tile('Messages', u.messages)); tiles.appendChild(tile('Recommendations', u.recommendations));
+      tiles.appendChild(tile('Guided starts', u.guided_started));
+      tiles.appendChild(tile('Median reply time', u.median_latency_ms == null ? 'n/a' : (u.median_latency_ms / 1000).toFixed(1) + ' s'));
+      var body = $('days-body'); body.textContent = '';
+      (u.by_day || []).forEach(function (d) {
+        var tr = el('tr'); [d.date, d.visitors, d.sessions, d.messages].forEach(function (v) { tr.appendChild(el('td', null, v)); }); body.appendChild(tr);
+      });
+      kv($('langs'), 'Languages', u.languages); kv($('intents'), 'Intents', u.intents);
+      renderConvs(); $('report').hidden = false; $('msg').textContent = 'Showing data since ' + local(u.since) + '.';
+    }).catch(function (e) {
+      if (e.message === '401') { sessionStorage.removeItem('psa_admin'); $('msg').textContent = 'That token was not accepted.'; }
+      else $('msg').textContent = 'Could not load usage. Please try again.';
+      $('report').hidden = true;
+    });
+  }
+  $('auth').addEventListener('submit', function (ev) { ev.preventDefault(); load(); });
+  $('days').addEventListener('change', function () { if (sessionStorage.getItem('psa_admin')) load(); });
+  $('filter').addEventListener('input', renderConvs);
+  $('showall').addEventListener('click', function () { hidden = {}; $('filter').value = ''; renderConvs(); });
+  $('csv').addEventListener('click', downloadCsv);
+  if (sessionStorage.getItem('psa_admin')) load();
+})();
+</script>
+</body>
+</html>
