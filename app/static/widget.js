@@ -453,6 +453,8 @@
     props = props || {};
     if (!S.ready) { S.pendingEvents.push([name, props]); return; }
     props.lang = props.lang || S.lang;
+    // Host pages can forward these events to their own analytics (the homepage sends them to Application Insights).
+    try { window.dispatchEvent(new CustomEvent('psa:event', { detail: { name: name, props: props } })); } catch (e) {}
     try {
       fetch(API + '/api/events', {
         method: 'POST', keepalive: true,

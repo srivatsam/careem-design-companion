@@ -165,6 +165,38 @@
     * { transition-duration: 1ms !important; }
   }
 </style>
+<script>
+  // Azure Application Insights: page views, visitors, devices, locations, API timings and the advisor's events.
+  // The connection string is a public ingestion address, safe to ship in the page.
+  (function () {
+    var CS = "InstrumentationKey=a5d46325-79cf-44d0-916c-673a996df8e9;IngestionEndpoint=https://uaenorth-0.in.applicationinsights.azure.com/;LiveEndpoint=https://uaenorth.livediagnostics.monitor.azure.com/;ApplicationId=465f9f41-af07-4ad3-bb8f-5545e7811cd0";
+    var queue = [];
+    function forward(ev) { var d = ev.detail || {}; if (window.appInsights && window.appInsights.trackEvent) window.appInsights.trackEvent({ name: d.name }, d.props || {}); else queue.push(d); }
+    window.addEventListener('psa:event', forward);
+    var s = document.createElement('script');
+    s.src = 'https://js.monitor.azure.com/scripts/b/ai.3.gbl.min.js';
+    s.async = true; s.crossOrigin = 'anonymous';
+    s.onload = function () {
+      try {
+        var ai = new Microsoft.ApplicationInsights.ApplicationInsights({ config: {
+          connectionString: CS, enableAutoRouteTracking: false, disableFetchTracking: false,
+          enableCorsCorrelation: false, enableUnhandledPromiseRejectionTracking: true } });
+        ai.loadAppInsights();
+        ai.addTelemetryInitializer(function (item) {
+          item.tags = item.tags || {};
+          item.tags['ai.cloud.role'] = 'atelier-noor-web';
+          var params = new URLSearchParams(location.search);
+          item.data = item.data || {};
+          item.data.lang = params.get('lang') === 'ar' ? 'ar' : 'en';
+        });
+        ai.trackPageView({ name: document.title });
+        window.appInsights = ai;
+        queue.splice(0).forEach(function (d) { ai.trackEvent({ name: d.name }, d.props || {}); });
+      } catch (e) { /* analytics never breaks the page */ }
+    };
+    document.head.appendChild(s);
+  })();
+</script>
 </head>
 <body>
   <header class="top">
@@ -240,7 +272,7 @@
     });
 
     var s = document.createElement('script');
-    s.src = '/widget.js?v=68d5ac00b3';  // version = content hash; update on every release so browsers fetch the new file
+    s.src = '/widget.js?v=eb548e2c5a';  // version = content hash; update on every release so browsers fetch the new file
     s.setAttribute('data-lang', lang);
     s.setAttribute('data-brand', params.get('brand') || '');
     s.setAttribute('data-mode', 'page');
