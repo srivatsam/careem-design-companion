@@ -660,6 +660,8 @@
     // ---- tabs
     '.tabs{position:relative;display:flex;align-items:center;gap:6px;padding:6px 12px 0;border-bottom:1px solid var(--border)}',
     '.psa[data-mode=page] .tabs{background:var(--surface);-webkit-backdrop-filter:saturate(1.6) blur(14px);backdrop-filter:saturate(1.6) blur(14px)}',
+    // touch screens: solid tab bar (mobile WebKit can paint a backdrop-filter bar blank over scrolling content)
+    '@media (hover:none),(pointer:coarse){.psa[data-mode=page] .tabs{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--surface-solid)}}',
     '.restart-link{display:none}',
     '.psa[data-mode=page] .restart-link{display:inline-flex;align-items:center;margin-inline-start:auto;height:var(--tap);padding:0 6px;border:0;background:none;',
     'font-size:13px;font-weight:650;color:var(--ink-3);border-radius:var(--r-1);transition:color var(--t-1) var(--ease)}',
@@ -1236,6 +1238,13 @@
   }
   window.addEventListener('resize', queueViewportSync);
   window.addEventListener('orientationchange', function () { setTimeout(syncViewport, 250); });
+  // Page mode owns the whole screen: the document itself never scrolls (only the conversation does). Phone
+  // browsers can still nudge it when focus moves or the keyboard closes, which would push the top bar away.
+  if (S.mode === 'page') {
+    window.addEventListener('scroll', function () {
+      if (window.scrollY || window.pageYOffset) { try { window.scrollTo(0, 0); } catch (e) {} }
+    }, { passive: true });
+  }
   syncViewport();
 
   // Focusing the composer: bring the newest message back above the keyboard once it has finished animating.
